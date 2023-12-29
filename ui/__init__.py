@@ -134,7 +134,7 @@ class Printer():
         print(self._c(l), end="")
         for c in range(len(cols)):
             theme_n = c if len(cols) == len(self.themes) else -1
-            col = cols[c]
+            col = "" if cols[c] is None else str(cols[c])
             align = '>' if self.money.match(col) else '<'
             layout = ' {{0:{}{}s}} '.format(align, self.widths[c])
             print(
