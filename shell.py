@@ -37,14 +37,24 @@ class Repetition:
         r'(?:[/](\d+))?'
         r'\Z'), re.X|re.M|re.S)
 
-    def __init__(self, text):
-        self.when = None
-        self.repeater = None
-        m = self.REGEX.match(text)
+    @staticmethod
+    def parse(text):
+        m = Repetition.REGEX.match(text)
         if m is None:
-            raise ValueError(f'Invalid repetition string: {text}')
-        self.when = m.group(1)
-        self.repeater = 1 if m.group(2) is None else int(m.group(2) )
+            return None
+        return {'when': m.group(1),
+                'repeater': 1 if m.group(2) is None else int(m.group(2))}
+
+    def __init__(self, text):
+        data = self.parse(text)
+        if data is None:
+#           raise ValueError(f'Invalid repetition string: {text}')
+            print(f'Invalid repetition string: {text}')
+            self.when = text
+            self.repeater = ""
+        else:
+            self.when = data['when']
+            self.repeater = data['repeater']
 
     def __str__(self):
         when = self.when
@@ -63,14 +73,20 @@ class Money:
 
     REGEX = re.compile(r'^([$]?[-]?|[-]?[$]?)[0-9]+([.][0-9]+)?$')
 
+    @staticmethod
+    def parse(text):
+        if isinstance(text, float):
+            return text
+        m = Money.REGEX.match(text.strip())
+        if m is None:
+            return None
+        return float(text.replace('$', "").replace(',', ""))
+
     def __init__(self, amount):
-        if isinstance(amount, float):
-            self.amount = amount
-        else:
-            amount = amount.strip()
-            if not self.REGEX.search(amount):
-                raise ValueError(f'{amount} does look like: $D.CC')
-            self.amount = float(amount.replace('$', ""))
+        data = self.parse(amount)
+        if data is None:
+            raise ValueError(f'{amount} should resemble: $1.00')
+        self.amount = data
 
     def __float__(self):
         return self.amount
@@ -227,10 +243,10 @@ class Table:
     def transactions_table(self, transactions):
         """Display the transaction types table.
         """
-        ptr = Printer(['10', 10,  14, '*', 12])
+        ptr = Printer(['10', 14,  10, '*', 12])
         ptr.table_header(title='Transaction Types')
 
-        ptr.table_row('Category', 'Amount', 'Repeats', 'Match Description', 'Match Amount')
+        ptr.table_row('Category', 'Repeats', 'Amount', 'Match Description', 'Match Amount')
         ptr.table_boundary(weight='lite')
 
         records = sorted(transactions, key=itemgetter('amount'))
@@ -240,8 +256,8 @@ class Table:
             ptr.set_theme(**theme)
             ptr.table_row(
                 trans.get('category'),
-                f'{trans.get("amount"):0.2f}',
                 str(Repetition(trans.get('repetition'))),
+                f'{trans.get("amount"):0.2f}',
                 trans.get('conditions').get('description'),
                 trans.get('conditions').get('debit'))
         ptr.table_close()
@@ -394,7 +410,11 @@ class BudgetShell(cmd.Cmd):
             print(f'Unrecognized category: {cat}', file=sys.stderr)
             return
         fg = m.group(2)
+        if not fg.isdigit():
+            print(f'Forground value {fg} is not an int')
         bg = m.group(3)
+        if not bg.isdigit():
+            print(f'Background value {bg} is not an int')
         style = m.group(4)
         if style not in STYLES:
             print(f'Unrecognized style: {style}', file=sys.stderr)
@@ -458,8 +478,18 @@ class BudgetShell(cmd.Cmd):
             print(f'Unable parse transaction update: {arg_str}')
             return
         cat = m.group(1)
+        if cat not in self.categories:
+            if not re.match(r'\A\w+\Z', cat):
+                print(f'Bad category name: {cat}', file=sys.stderr)
+                return
         repetition = m.group(2)
+        if Repetition.parse(repetition) is None:
+            print(f'Invalid repetition pattern: {repetition}')
+            return
         amount = m.group(3)
+        if Money.parse(amount) is None:
+            print(f'Invalid monetary value: {amount}')
+            return
         description_regex = "" if m.group(4) is None else m.group(4)
         debit_regex = "" if m.group(5) is None else m.group(5)
         for transaction_type in self.transaction_types:
@@ -479,6 +509,8 @@ class BudgetShell(cmd.Cmd):
                                             'description': description_regex,
                                             'debit': debit_regex
                                         }})
+        self.categories = sorted([trans['category']
+                                 for trans in self.transaction_types])
         self.transaction_types_changed = True
         return
 
@@ -570,6 +602,10 @@ class BudgetShell(cmd.Cmd):
 
     def do_del(self, arg_str):
         print(f'del: {arg_str}')
+        del_theme_regex = re.compile((
+            r'\A theme \s+ '
+            r'   (\w+) '
+            r'\Z'), re.X | re.M | re.S | re.I)
         del_exception_regex = re.compile((
             r'\A exception \s+ '
             r'   (\w+) \s+ '
@@ -579,6 +615,14 @@ class BudgetShell(cmd.Cmd):
             r'\A transaction \s+ '
             r'   (\w+) '
             r'\Z'), re.X | re.M | re.S | re.I)
+        m = del_theme_regex.match(arg_str)
+        if m is not None:
+            cat = m.group(1)
+            print(f'Removing theme {cat}')
+            self.themes = [theme
+                           for theme in self.themes
+                           if theme['category'] != cat]
+            return
         m = del_exception_regex.match(arg_str)
         if m is not None:
             cat = m.group(1)
@@ -602,6 +646,8 @@ class BudgetShell(cmd.Cmd):
             self.transaction_types = [transaction_type
                                       for transaction_type in self.transaction_types
                                       if transaction_type['category'] != cat]
+            self.categories = sorted([trans['category']
+                                     for trans in self.transaction_types])
             return
 
     def complete_del(self, text, state, begidx, endidx):
