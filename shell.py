@@ -240,13 +240,19 @@ class Table:
                 f'{exception.get("amount"):0.2f}')
         ptr.table_close()
 
-    def transactions_table(self, transactions):
+    def transactions_table(self, transactions, abbreviated=False):
         """Display the transaction types table.
         """
-        ptr = Printer(['10', 14,  10, '*', 12])
-        ptr.table_header(title='Transaction Types')
+        col_sizes = ['10', 14,  10, '*', 12]
+        col_headers = ['Category', 'Repeats', 'Amount', 'Match Description', 'Match Amount']
 
-        ptr.table_row('Category', 'Repeats', 'Amount', 'Match Description', 'Match Amount')
+        if abbreviated:
+            col_sizes = ['10', 14,  10]
+            col_headers = ['Category', 'Repeats', 'Amount']
+
+        ptr = Printer(col_sizes)
+        ptr.table_header(title='Transaction Types')
+        ptr.table_row(*col_headers)
         ptr.table_boundary(weight='lite')
 
         records = sorted(transactions, key=itemgetter('amount'))
@@ -254,12 +260,18 @@ class Table:
         for trans in records:
             theme = self.get(trans.get('category'))
             ptr.set_theme(**theme)
-            ptr.table_row(
-                trans.get('category'),
-                str(Repetition(trans.get('repetition'))),
-                f'{trans.get("amount"):0.2f}',
-                trans.get('conditions').get('description'),
-                trans.get('conditions').get('debit'))
+            if abbreviated:
+                ptr.table_row(
+                    trans.get('category'),
+                    str(Repetition(trans.get('repetition'))),
+                    f'{trans.get("amount"):0.2f}')
+            else:
+                ptr.table_row(
+                    trans.get('category'),
+                    str(Repetition(trans.get('repetition'))),
+                    f'{trans.get("amount"):0.2f}',
+                    trans.get('conditions').get('description'),
+                    trans.get('conditions').get('debit'))
         ptr.table_close()
 
     def theme_table(self, themes):
@@ -679,6 +691,9 @@ class BudgetShell(cmd.Cmd):
 
     def do_exceptions(self, line):
         self.table.exceptions_table(self.exceptions)
+
+    def do_trans(self, line):
+        self.table.transactions_table(self.transaction_types, abbreviated=True)
 
     def do_transactions(self, line):
         self.table.transactions_table(self.transaction_types)
