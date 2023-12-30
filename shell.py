@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from pprint import pprint
 
 import os
 import re
@@ -608,29 +609,38 @@ class BudgetShell(cmd.Cmd):
                         if opt.startswith(save_type)]
         return None
 
-    def do_del(self, arg_str):
-        print(f'del: {arg_str}')
+    def delete_theme(self, arg_str):
         del_theme_regex = re.compile((
-            r'\A theme \s+ '
-            r'   (\w+) '
-            r'\Z'), re.X | re.M | re.S | re.I)
-        del_exception_regex = re.compile((
-            r'\A exception \s+ '
-            r'   (\w+) \s+ '
-            r'   (\d{2}[-]\d{2}[-]\d{4}) '
-            r'\Z'), re.X | re.M | re.S | re.I)
-        del_transaction_regex = re.compile((
-            r'\A transaction \s+ '
-            r'   (\w+) '
+            r'\A'
+            r'   (\w+|[*]) '
+            r'   ( \s+ -f )? '
             r'\Z'), re.X | re.M | re.S | re.I)
         m = del_theme_regex.match(arg_str)
         if m is not None:
             cat = m.group(1)
-            print(f'Removing theme {cat}')
-            self.themes = [theme
-                           for theme in self.themes
-                           if theme['category'] != cat]
+            force = m.group(2)
+            if cat == '*':
+                if force is None:
+                    print('Cannot del all themes without the force (-f) flag',
+                          file=sys.stdout)
+                    return
+                self.table.themes = {}
+                print('Removed all themes')
+                self.themes_changed = True
+                return
+            if cat in self.table.themes:
+                del self.table.themes[cat]
+                print(f'Removed {cat} theme')
+                self.themes_changed = True
             return
+        print(f'Invalid theme del command: {arg_str}', file=sys.stderr)
+
+    def delete_exception(self, arg_str):
+        del_exception_regex = re.compile((
+            r'\A'
+            r'   (\w+) \s+ '
+            r'   (\d{2}[-]\d{2}[-]\d{4}|[*]) '
+            r'\Z'), re.X | re.M | re.S | re.I)
         m = del_exception_regex.match(arg_str)
         if m is not None:
             cat = m.group(1)
@@ -638,27 +648,61 @@ class BudgetShell(cmd.Cmd):
                 print(f'Unrecognized category: {cat}', file=sys.stderr)
                 return
             date = m.group(2)
-            print(f'Removing exception {cat} on {date}')
-            self.exceptions = [exception
-                               for exception in self.exceptions
-                               if not (exception['category'] == cat and exception['date'] == date)]
+            if date == '*':
+                self.exceptions = [exception
+                                for exception in self.exceptions
+                                if exception['category'] != cat]
+                print(f'Removed all {cat} exceptions')
+            else:
+                self.exceptions = [exception
+                                for exception in self.exceptions
+                                if not (exception['category'] == cat and exception['date'] == date)]
+                print(f'Removed {cat} exception for {date}')
+            self.exceptions_changed = True
             return
+        print(f'Invalid exception del command: {arg_str}', file=sys.stderr)
+
+    def delete_transaction(self, arg_str):
+        del_transaction_regex = re.compile((
+            r'\A'
+            r'   (\w+) '
+            r'\Z'), re.X | re.M | re.S | re.I)
         m = del_transaction_regex.match(arg_str)
         if m is not None:
             cat = m.group(1)
             if cat not in self.categories:
                 print(f'Unrecognized category: {cat}', file=sys.stderr)
                 return
-            print(f'Removing transaction {cat}')
             self.transaction_types = [transaction_type
                                       for transaction_type in self.transaction_types
                                       if transaction_type['category'] != cat]
+            self.delete_theme(cat)
+            self.delete_exception(f'{cat} *')
             self.categories = sorted([trans['category']
                                      for trans in self.transaction_types])
+            print(f'Removed {cat} transaction')
+            self.transaction_types_changed = True
             return
+        print(f'Invalid transactions del command: {arg_str}', file=sys.stderr)
+
+    def do_del(self, arg_str):
+        if ' ' not in arg_str:
+            print(f'Invalid del command: {arg_str}', file=sys.stderr)
+            return
+        del_type, arg_str = re.split(r'\s+', arg_str.strip(), 1)
+        if del_type == 'theme':
+            self.delete_theme(arg_str)
+            return
+        if del_type == 'exception':
+            self.delete_exception(arg_str)
+            return
+        if del_type == 'transaction':
+            self.delete_transaction(arg_str)
+            return
+        print(f'Unrecognized del type: {del_type}', file=sys.stderr)
 
     def complete_del(self, text, state, begidx, endidx):
-        del_types = ['transaction', 'exception']
+        del_types = ['transaction', 'theme', 'exception']
         tokens = re.split(r'\s+', state.strip())
         if len(tokens) == 1:
             return del_types
