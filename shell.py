@@ -48,13 +48,9 @@ class Repetition:
     def __init__(self, text):
         data = self.parse(text)
         if data is None:
-#           raise ValueError(f'Invalid repetition string: {text}')
-            print(f'Invalid repetition string: {text}')
-            self.when = text
-            self.repeater = ""
-        else:
-            self.when = data['when']
-            self.repeater = data['repeater']
+            raise ValueError(f'Invalid repetition string: {text}')
+        self.when = data['when']
+        self.repeater = data['repeater']
 
     def __str__(self):
         when = self.when
