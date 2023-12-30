@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-from pprint import pprint
 
 import os
 import re
@@ -9,10 +8,10 @@ import cmd
 import math
 import glob
 import pickle
-import inflect
 import readline  # MAC
 from datetime import datetime
 from operator import itemgetter
+import inflect
 from ui import Printer
 from budget import Budget
 from colors import STYLES
@@ -36,7 +35,7 @@ class Repetition:
         r'\A'
         r'(Sun|Mon|Tue|Wed|Thu|Fri|Sat|\d{1,2})'
         r'(?:[/](\d+))?'
-        r'\Z'), re.X|re.M|re.S)
+        r'\Z'), re.X | re.M | re.S)
 
     @staticmethod
     def parse(text):
@@ -98,9 +97,8 @@ class History:
     @staticmethod
     def find_transactions_csv():
         search_path = os.path.join(DOWNLOAD_DIR, 'transactions*.CSV')
-        filenames = [{'path': filename,
-                    'mtime': os.stat(filename).st_mtime}
-                    for filename in glob.glob(search_path)]
+        filenames = [{'path': filename, 'mtime': os.stat(filename).st_mtime}
+                     for filename in glob.glob(search_path)]
         if len(filenames) == 0:
             raise RuntimeError(f'transactions.CSV not in {DOWNLOAD_DIR}')
         csv_files = sorted(filenames, key=lambda fn: fn['mtime'])
@@ -115,7 +113,7 @@ class History:
         with open(csv_file, encoding='UTF-8') as csv_fh:
             csv_doc = csv.reader(csv_fh)
             headers = [header.lower().replace('.', "")
-                    for header in next(csv_doc)]
+                       for header in next(csv_doc)]
             for row in csv_doc:
                 event = {}
                 for header_i in range(len(headers)):
@@ -216,7 +214,7 @@ class Table:
                 if idx is None:
                     row.append("")
                 else:
-                    row.append(f'{idx:2d}. {cat}')
+                    row.append(cat)
                 themes.append(self.get(cat))
             ptr.set_themes(themes)
             ptr.table_row(*row)
@@ -376,6 +374,7 @@ class Data:
                 pickle.dump(themes, pkl_file)
             print(f'Updated: {THEMES_PKL}')
 
+
 class BudgetShell(cmd.Cmd):
     intro = 'Type help or ? to list commands.'
     prompt = 'Budget: '
@@ -420,26 +419,34 @@ class BudgetShell(cmd.Cmd):
             return
         fg = m.group(2)
         if not fg.isdigit():
-            print(f'Forground value {fg} is not an int')
+            print(f'Foreground value {fg} is not an int')
+            return
+        if not 0 <= int(fg) <= 255:
+            print(f'Foreground value {fg} must on the range of 0 to 255')
+            return
         bg = m.group(3)
         if not bg.isdigit():
             print(f'Background value {bg} is not an int')
+            return
+        if not 0 <= int(bg) <= 255:
+            print(f'Background value {bg} must on the range of 0 to 255')
+            return
         style = m.group(4)
         if style not in STYLES:
             print(f'Unrecognized style: {style}', file=sys.stderr)
             print(f'Choose from: {", ".join(STYLES)}')
             return
         if cat in self.table.themes:
-            print(f'Update theme {cat}: {fg}, {bg}, {style}')
             self.table.themes[cat]['fg'] = int(fg)
             self.table.themes[cat]['bg'] = int(bg)
             self.table.themes[cat]['style'] = style
+            print(f'Updated theme {cat}: {fg}, {bg}, {style}')
             self.themes_changed = True
             return
-        print(f'Add theme {cat}: {fg}, {bg}, {style}')
         self.table.themes[cat] = {'fg': int(fg),
                                   'bg': int(bg),
                                   'style': style}
+        print(f'Added theme {cat}: {fg}, {bg}, {style}')
         self.themes_changed = True
         return
 
@@ -503,27 +510,74 @@ class BudgetShell(cmd.Cmd):
         debit_regex = "" if m.group(5) is None else m.group(5)
         for transaction_type in self.transaction_types:
             if transaction_type['category'] == cat:
-                print(f'Update transaction {cat}: {amount} on {repetition}')
                 transaction_type['repetition'] = repetition
                 transaction_type['amount'] = float(Money(amount))
                 transaction_type['conditions']['description'] = description_regex
                 transaction_type['conditions']['debit'] = debit_regex
+                print(f'Updated transaction {cat}: {amount} on {repetition}')
                 self.transaction_types_changed = True
                 return
-        print(f'Add new transaction {cat}: {amount} on {repetition}')
         self.transaction_types.append({'category': cat,
-                                        'repetition': repetition,
-                                        'amount': float(Money(amount)),
-                                        'conditions': {
-                                            'description': description_regex,
-                                            'debit': debit_regex
-                                        }})
+                                       'repetition': repetition,
+                                       'amount': float(Money(amount)),
+                                       'conditions': {
+                                           'description': description_regex,
+                                           'debit': debit_regex
+                                       }})
         self.categories = sorted([trans['category']
                                  for trans in self.transaction_types])
+        print(f'Added a new transaction {cat}: {amount} on {repetition}')
         self.transaction_types_changed = True
         return
 
     def do_update(self, arg_str):
+        """Update the specified configuration.
+
+Usage: update <theme|exception|transaction> <cat> <parameters ...>
+
+Theme updates:
+    update theme <cat> <fg> <bg> <style>
+
+<cat>         - transaction category
+<fg> and <bg> - ANSI color codes on the range of 0 to 255.
+<style>       - text style modifier (see tab auto-complete for valid values)
+
+Themes are applied to a transaction event when a table of transactions
+is displayed.
+
+Exception updates:
+    update exception <cat> <mm-dd-yyyy> <amount>
+
+<cat>        - transaction category
+<mm-dd-yyyy> - date when the exception applies
+<amount>     - amount applicable to <cat> for this date
+
+Exceptions are cases where the amount on a particular transaction
+category deviates from the regularly scheduled amount.
+
+Transaction updates:
+    update transaction <cat> <when>[/<repeat>] <amount> <desc-regex> <amount-regex>
+
+<cat>     - transaction category
+<when>    - day of month, or day of week (Sun, Mon, ...)
+/<repeat> - optional repeater value default is 1
+    i.e. Tue/2 - every second Thursday
+         15    - every 15th day of the month
+         1/2   - every second first day of the month
+
+<amount> - regular amount for this transaction
+           (Include unary minus for debit values.)
+
+<desc-regex> - regular expression value that matches on the transaction Description
+               Note: Must use single quoted Python r-string syntax,
+                     such as: r'[ ]Mortgage[ ]Payment[ ]'
+
+<amount-regex> - regular expression value that matches on the transaction Debit
+                 Note: Must use single quoted Python r-string syntax,
+                       such as: r'[.]42$'
+
+Transactions are scheduled budget events, such as Rent, Payday, etc.
+"""
         if ' ' not in arg_str:
             print(f'Invalid update command: {arg_str}', file=sys.stderr)
             return
@@ -577,6 +631,11 @@ class BudgetShell(cmd.Cmd):
         return None
 
     def do_save(self, arg_str):
+        """Save changed data to disk.
+
+Usage: save [<themes|transactions|exceptions>]
+
+All changed data will be saved if the optional save type is omitted."""
         save_types = [save_type
                       for save_type in re.split(r'\s+', arg_str.strip())
                       if len(save_type) > 0]
@@ -650,13 +709,13 @@ class BudgetShell(cmd.Cmd):
             date = m.group(2)
             if date == '*':
                 self.exceptions = [exception
-                                for exception in self.exceptions
-                                if exception['category'] != cat]
+                                   for exception in self.exceptions
+                                   if exception['category'] != cat]
                 print(f'Removed all {cat} exceptions')
             else:
                 self.exceptions = [exception
-                                for exception in self.exceptions
-                                if not (exception['category'] == cat and exception['date'] == date)]
+                                   for exception in self.exceptions
+                                   if not (exception['category'] == cat and exception['date'] == date)]
                 print(f'Removed {cat} exception for {date}')
             self.exceptions_changed = True
             return
@@ -686,6 +745,24 @@ class BudgetShell(cmd.Cmd):
         print(f'Invalid transactions del command: {arg_str}', file=sys.stderr)
 
     def do_del(self, arg_str):
+        """Delete configuration.
+
+Usage: del <theme|exception|transaction> <parameters ...>
+
+Delete a theme:
+    del theme <cat>
+
+Delete all themes:
+    del theme * [-f]
+
+Delete an exception:
+    del exception <cat> <mm-dd-yyyy>
+
+Delete all exceptions for a transaction category:
+    del exception <cat> *
+
+Delete a transaction type:
+    del transaction <cat>"""
         if ' ' not in arg_str:
             print(f'Invalid del command: {arg_str}', file=sys.stderr)
             return
@@ -728,6 +805,11 @@ class BudgetShell(cmd.Cmd):
         return None
 
     def do_balance(self, line):
+        """Set or display the current account balance.
+
+Usage: balance [<amount>]
+
+Sets the account balance if a new value is provided."""
         line = line.strip().replace(',', "")
         if len(line) == 0:
             print(f'Balance: {Money(self.balance)}')
@@ -740,21 +822,31 @@ class BudgetShell(cmd.Cmd):
                 print(f'Balance: {Money(self.balance)}')
 
     def do_cats(self, line):
+        """Show a table of categories."""
         self.table.category_table(self.categories)
 
     def do_exceptions(self, line):
+        """Show a table of transaction exceptions."""
         self.table.exceptions_table(self.exceptions)
 
     def do_trans(self, line):
+        """Show an abbreviated table of transaction types."""
         self.table.transactions_table(self.transaction_types, abbreviated=True)
 
     def do_transactions(self, line):
+        """Show a table of transaction types."""
         self.table.transactions_table(self.transaction_types)
 
     def do_themes(self, line):
+        """Show a table of highlighting themes."""
         self.table.theme_table(self.table.themes)
 
     def do_run(self, argstr):
+        """Run the budget for the specified number of days.
+
+Usage: run <days> [-c]
+
+The optional -c will include a table of chokepoints."""
         days, chokepoints = None, None
         if ' ' in argstr:
             days, chokepoints = re.split(r'\s+', argstr.strip())
@@ -774,6 +866,7 @@ class BudgetShell(cmd.Cmd):
             self.table.projection_table(opening_balance, budget, chokepoints)
 
     def do_status(self, line):
+        """Display a summary of status parameters."""
         print(f'Current balance: {Money(self.balance)}')
         print(f'Category count: {len(self.categories)}')
         print(f'Exception count: {len(self.exceptions)}')
@@ -782,6 +875,7 @@ class BudgetShell(cmd.Cmd):
         print(f'Cache dir: {CACHE_DIR}')
 
     def do_exit(self, line):
+        """Save changes and exit."""
         if self.themes_changed:
             Data.update_theme(self.table.themes)
         if self.transaction_types_changed:
@@ -791,12 +885,15 @@ class BudgetShell(cmd.Cmd):
         return True
 
     def do_quit(self, line):
+        """Terminate the program."""
         return True
 
     def do_q(self, line):
+        """Terminate the program."""
         return True
 
     def do_clear(self, line):
+        """Clear the screen."""
         print('\n' * 100)
         os.system('clear')
 
