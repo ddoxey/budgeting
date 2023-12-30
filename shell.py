@@ -645,8 +645,7 @@ class BudgetShell(cmd.Cmd):
             print(f'Removing exception {cat} on {date}')
             self.exceptions = [exception
                                for exception in self.exceptions
-                               if exception['category'] != cat
-                               and exception['date'] != date]
+                               if not (exception['category'] == cat and exception['date'] == date)]
             return
         m = del_transaction_regex.match(arg_str)
         if m is not None:
@@ -667,11 +666,25 @@ class BudgetShell(cmd.Cmd):
         tokens = re.split(r'\s+', state.strip())
         if len(tokens) == 1:
             return del_types
+        del_type = tokens[1]
         if len(tokens) == 2:
-            del_type = tokens[1]
             if del_type not in del_types:
                 return [opt for opt in del_types
                         if opt.startswith(del_type)]
+            return self.categories
+        cat = tokens[2]
+        if len(tokens) == 3:
+            if cat not in self.categories:
+                return [opt for opt in self.categories
+                        if opt.startswith(cat)]
+            return self.get_predicted_dates(cat)
+        date = tokens[3]
+        if len(tokens) == 4:
+            cat_dates = self.get_predicted_dates(cat)
+            if date not in cat_dates:
+                return [cat_date for cat_date in cat_dates
+                        if cat_date.startswith(date)]
+
         return None
 
     def do_balance(self, line):
