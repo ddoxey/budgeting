@@ -2,18 +2,17 @@
 
 import os
 import re
-import csv
 import sys
 import cmd
 import math
-import glob
-import pickle
 import readline  # MAC
-from datetime import datetime
 from operator import itemgetter
 from ui import Printer
 from budget import Budget
 from colors import STYLES
+from util.cache import Cache
+from util.money import Money
+from util.history import History
 from util.repetition import Repetition
 
 
@@ -22,71 +21,12 @@ if 'libedit' in readline.__doc__:
 else:
     readline.parse_and_bind('tab: complete')  # Linux
 
-CACHE_DIR = os.path.join(os.environ["HOME"], '.cache', 'budget')
-DOWNLOAD_DIR = os.path.join(os.environ["HOME"], 'Downloads')
 TRANSACTIONS_PKL = 'transactions.pkl'
 EXCEPTIONS_PKL = 'exceptions.pkl'
 THEMES_PKL = 'themes.pkl'
 
 
-class Money:
-
-    REGEX = re.compile(r'^([$]?[-]?|[-]?[$]?)[0-9]+([.][0-9]+)?$')
-
-    @staticmethod
-    def parse(text):
-        if isinstance(text, float):
-            return text
-        m = Money.REGEX.match(text.strip())
-        if m is None:
-            return None
-        return float(text.replace('$', "").replace(',', ""))
-
-    def __init__(self, amount):
-        data = self.parse(amount)
-        if data is None:
-            raise ValueError(f'{amount} should resemble: $1.00')
-        self.amount = data
-
-    def __float__(self):
-        return self.amount
-
-    def __str__(self):
-        dollars, cents = f'{self.amount:0.2f}'.split('.')
-        return f'${int(dollars):,d}.{cents}'
-
-
-class History:
-
-    @staticmethod
-    def find_transactions_csv():
-        search_path = os.path.join(DOWNLOAD_DIR, 'transactions*.CSV')
-        filenames = [{'path': filename, 'mtime': os.stat(filename).st_mtime}
-                     for filename in glob.glob(search_path)]
-        if len(filenames) == 0:
-            raise RuntimeError(f'transactions.CSV not in {DOWNLOAD_DIR}')
-        csv_files = sorted(filenames, key=lambda fn: fn['mtime'])
-        if 'DEBUG' in os.environ and os.environ['DEBUG']:
-            print('chosen CSV:', csv_files[-1]['path'])
-        return csv_files[-1]['path']
-
-    @staticmethod
-    def read_transaction_history():
-        csv_file = History.find_transactions_csv()
-        history = []
-        with open(csv_file, encoding='UTF-8') as csv_fh:
-            csv_doc = csv.reader(csv_fh)
-            headers = [header.lower().replace('.', "")
-                       for header in next(csv_doc)]
-            for row in csv_doc:
-                event = {}
-                for header_i in range(len(headers)):
-                    event[headers[header_i]] = row[header_i]
-                history.append(event)
-        return history
-
-
-class Table:
+class Tables:
 
     def __init__(self, themes):
         self.themes = themes
@@ -255,90 +195,6 @@ class Table:
         ptr.table_close()
 
 
-class Data:
-
-    @staticmethod
-    def cache_file(filename):
-        if not os.path.exists(CACHE_DIR):
-            os.makedirs(CACHE_DIR, mode=0o700, exist_ok=True)
-        return os.path.join(CACHE_DIR, filename)
-
-    @staticmethod
-    def read_exception(categories):
-        """Read the exceptions data from the Pickle datafile.
-        """
-        exceptions = None
-        with open(Data.cache_file(EXCEPTIONS_PKL), 'rb') as pkl_file:
-            exceptions = pickle.load(pkl_file)
-
-        if exceptions is None:
-            raise RuntimeError(f'Unable to read: {EXCEPTIONS_PKL}')
-
-        def update_epoch(exc: dict):
-            """Add an 'epoch' Property.
-            """
-            date = datetime.strptime(exc['date'], '%m-%d-%Y')
-            exc['epoch'] = int(date.strftime('%s'))
-            return exc
-
-        threshold = 15
-        records = sorted([update_epoch(record) for record in exceptions],
-                         key=itemgetter('epoch'))
-
-        return [exc for exc in records
-                if exc['epoch'] >= threshold
-                and exc.get('category') in categories]
-
-    @staticmethod
-    def update_exception(exceptions: list):
-        """Save the updated Exceptions list to the db.
-        """
-        if len(exceptions) > 0:
-            with open(Data.cache_file(EXCEPTIONS_PKL), 'wb') as pkl_file:
-                pickle.dump(exceptions, pkl_file)
-            print(f'Updated: {EXCEPTIONS_PKL}')
-
-    @staticmethod
-    def read_transaction_type():
-        """Read the transactions data from the Pickle datafile.
-        """
-        transactions = None
-        with open(Data.cache_file(TRANSACTIONS_PKL), 'rb') as pkl_file:
-            transactions = pickle.load(pkl_file)
-        if transactions is None:
-            raise RuntimeError(f'Unable to read: {TRANSACTIONS_PKL}')
-        return transactions
-
-    @staticmethod
-    def update_transaction_type(transactions: list):
-        """Save the updated transactions list to the db.
-        """
-        if len(transactions) > 0:
-            with open(Data.cache_file(TRANSACTIONS_PKL), 'wb') as pkl_file:
-                pickle.dump(transactions, pkl_file)
-            print(f'Updated: {TRANSACTIONS_PKL}')
-
-    @staticmethod
-    def read_theme():
-        """Read the themes data from the Pickle datafile.
-        """
-        themes = None
-        with open(Data.cache_file(THEMES_PKL), 'rb') as pkl_file:
-            themes = pickle.load(pkl_file)
-        if themes is None:
-            raise RuntimeError(f'Unable to read: {THEMES_PKL}')
-        return themes
-
-    @staticmethod
-    def update_theme(themes: list):
-        """Save the updated themes list to the db.
-        """
-        if len(themes) > 0:
-            with open(Data.cache_file(THEMES_PKL), 'wb') as pkl_file:
-                pickle.dump(themes, pkl_file)
-            print(f'Updated: {THEMES_PKL}')
-
-
 class BudgetShell(cmd.Cmd):
     intro = 'Type help or ? to list commands.'
     prompt = 'Budget: '
@@ -349,11 +205,15 @@ class BudgetShell(cmd.Cmd):
         self.transaction_types_changed = False
         self.exceptions_changed = False
         self.balance = 0.0
-        self.table = Table(Data.read_theme())
-        self.transaction_types = Data.read_transaction_type()
+        self.cache = Cache(name='budget',
+                           themes=THEMES_PKL,
+                           transactions=TRANSACTIONS_PKL,
+                           exceptions=EXCEPTIONS_PKL)
+        self.tables = Tables(self.cache.read_theme())
+        self.transaction_types = self.cache.read_transaction_type()
         self.categories = sorted([trans['category']
                                  for trans in self.transaction_types])
-        self.exceptions = Data.read_exception(self.categories)
+        self.exceptions = self.cache.read_exception(self.categories)
         self.history = History.read_transaction_history()
 
     def get_predicted_dates(self, cat):
@@ -400,14 +260,14 @@ class BudgetShell(cmd.Cmd):
             print(f'Unrecognized style: {style}', file=sys.stderr)
             print(f'Choose from: {", ".join(STYLES)}')
             return
-        if cat in self.table.themes:
-            self.table.themes[cat]['fg'] = int(fg)
-            self.table.themes[cat]['bg'] = int(bg)
-            self.table.themes[cat]['style'] = style
+        if cat in self.tables.themes:
+            self.tables.themes[cat]['fg'] = int(fg)
+            self.tables.themes[cat]['bg'] = int(bg)
+            self.tables.themes[cat]['style'] = style
             print(f'Updated theme {cat}: {fg}, {bg}, {style}')
             self.themes_changed = True
             return
-        self.table.themes[cat] = {'fg': int(fg),
+        self.tables.themes[cat] = {'fg': int(fg),
                                   'bg': int(bg),
                                   'style': style}
         print(f'Added theme {cat}: {fg}, {bg}, {style}')
@@ -608,15 +468,15 @@ All changed data will be saved if the optional save type is omitted."""
         for save_type in save_types:
             if save_type == 'themes':
                 if self.themes_changed:
-                    Data.update_theme(self.table.themes)
+                    self.cache.update_theme(self.tables.themes)
                 continue
             if save_type == 'exceptions':
                 if self.exceptions_changed:
-                    Data.update_exception(self.exceptions)
+                    self.cache.update_exception(self.exceptions)
                 continue
             if save_type == 'transactions':
                 if self.transaction_types_changed:
-                    Data.update_transaction_type(self.transaction_types)
+                    self.cache.update_transaction_type(self.transaction_types)
                 continue
             print(f'Unrecognized save type: {save_type}', file=sys.stderr)
 
@@ -647,12 +507,12 @@ All changed data will be saved if the optional save type is omitted."""
                     print('Cannot del all themes without the force (-f) flag',
                           file=sys.stdout)
                     return
-                self.table.themes = {}
+                self.tables.themes = {}
                 print('Removed all themes')
                 self.themes_changed = True
                 return
-            if cat in self.table.themes:
-                del self.table.themes[cat]
+            if cat in self.tables.themes:
+                del self.tables.themes[cat]
                 print(f'Removed {cat} theme')
                 self.themes_changed = True
             return
@@ -787,23 +647,23 @@ Sets the account balance if a new value is provided."""
 
     def do_cats(self, line):
         """Show a table of categories."""
-        self.table.category_table(self.categories)
+        self.tables.category_table(self.categories)
 
     def do_exceptions(self, line):
         """Show a table of transaction exceptions."""
-        self.table.exceptions_table(self.exceptions)
+        self.tables.exceptions_table(self.exceptions)
 
     def do_trans(self, line):
         """Show an abbreviated table of transaction types."""
-        self.table.transactions_table(self.transaction_types, abbreviated=True)
+        self.tables.transactions_table(self.transaction_types, abbreviated=True)
 
     def do_transactions(self, line):
         """Show a table of transaction types."""
-        self.table.transactions_table(self.transaction_types)
+        self.tables.transactions_table(self.transaction_types)
 
     def do_themes(self, line):
         """Show a table of highlighting themes."""
-        self.table.theme_table(self.table.themes)
+        self.tables.theme_table(self.tables.themes)
 
     def do_run(self, argstr):
         """Run the budget for the specified number of days.
@@ -827,7 +687,7 @@ The optional -c will include a table of chokepoints."""
                 self.exceptions,
                 self.history,
                 int(days))
-            self.table.projection_table(opening_balance, budget, chokepoints)
+            self.tables.projection_table(opening_balance, budget, chokepoints)
 
     def do_status(self, line):
         """Display a summary of status parameters."""
@@ -835,17 +695,17 @@ The optional -c will include a table of chokepoints."""
         print(f'Category count: {len(self.categories)}')
         print(f'Exception count: {len(self.exceptions)}')
         print(f'Historical event count: {len(self.history)}')
-        print(f'Downloads dir: {DOWNLOAD_DIR}')
-        print(f'Cache dir: {CACHE_DIR}')
+        print(f'Downloads dir: {History.download_dir()}')
+        print(f'Cache dir: {self.cache.cache_dir()}')
 
     def do_exit(self, line):
         """Save changes and exit."""
         if self.themes_changed:
-            Data.update_theme(self.table.themes)
+            self.cache.update_theme(self.tables.themes)
         if self.transaction_types_changed:
-            Data.update_transaction_type(self.transaction_types)
+            self.cache.update_transaction_type(self.transaction_types)
         if self.exceptions_changed:
-            Data.update_exception(self.exceptions)
+            self.cache.update_exception(self.exceptions)
         return True
 
     def do_quit(self, line):
