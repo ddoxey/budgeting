@@ -1,26 +1,22 @@
 import re
 import os
 from colors import color
-from pprint import pprint
-from operator import itemgetter
 
 
-class Printer():
+class Printer:
 
     widths = []
     themes = []
     money = re.compile(r'[-]?[0-9]+[.][0-9]{2}')
 
-    def __init__(self, column_widths):
-
-        self.rows, self.columns = [
-            int(n) for n in os.popen('stty size', 'r').read().split()]
-
-        self.set_column_widths(column_widths)
-
+    def __init__(self, *column_widths):
+        self.rows, self.columns = None, None
+        with os.popen('stty size', 'r') as stty:
+            for line in stty:
+                self.rows, self.columns = [int(n) for n in line.split()]
+                break
+        self.set_column_widths(list(column_widths))
         self.set_theme()
-
-        return
 
     def set_column_widths(self, column_widths):
 
@@ -33,29 +29,23 @@ class Printer():
                 wildcard_at.add(idx)
 
         def column_sum(widths):
-            return column_sep + sum([
+            return column_sep + sum((
                 column_pad + width + column_sep
                 for width in widths
-                if isinstance(width, int)])
+                if isinstance(width, int)))
 
         if len(wildcard_at) > 0:
-
             width_sum = column_sum(column_widths)
-
             surplus = self.columns - width_sum
-
             wildcard = int(
                 (surplus / len(wildcard_at))
                 - (column_pad + column_sep))
-
             wildcard = 1 if wildcard <= 0 else wildcard
 
             for idx in wildcard_at:
                 column_widths[idx] = wildcard
 
         self.widths = column_widths
-
-        return
 
     def set_themes(self, themes):
         self.themes = []
@@ -66,8 +56,6 @@ class Printer():
                 'style': theme.get('style', ""),
             })
 
-        return
-
     def set_theme(self, fg='black', bg='white', style=""):
 
         self.themes = [{
@@ -75,7 +63,6 @@ class Printer():
             'bg': bg,
             'style': style,
         }]
-        return
 
     def _c(self, key):
 
@@ -123,20 +110,19 @@ class Printer():
 
     def _table_bar(self, l, h, t, r):
         print(self._c(l), end="")
-        for c in range(len(self.widths)):
-            w = self.widths[c]
-            print(self._c(h).ljust(w + 2, self._c(h)), end="")
-            if c < len(self.widths) - 1:
+        for width_i, width in enumerate(self.widths):
+            print(self._c(h).ljust(width + 2, self._c(h)), end="")
+            if width_i < len(self.widths) - 1:
                 print(self._c(t), end="")
         print(self._c(r))
 
     def _table_row(self, l, r, *cols):
         print(self._c(l), end="")
-        for c in range(len(cols)):
-            theme_n = c if len(cols) == len(self.themes) else -1
-            col = "" if cols[c] is None else str(cols[c])
+        for col_i, col in enumerate(cols):
+            theme_n = col_i if len(cols) == len(self.themes) else -1
+            col = "" if col is None else str(col)
             align = '>' if self.money.match(col) else '<'
-            layout = ' {{0:{}{}s}} '.format(align, self.widths[c])
+            layout = ' {{0:{}{}s}} '.format(align, self.widths[col_i])
             print(
                 color(
                     layout.format(col),
@@ -150,26 +136,25 @@ class Printer():
 
     def _table_title_row(self, title):
         self._table_bar('ul', 'hl', 'hl', 'ur')
-        width = -1 + sum([w + 3 for w in self.widths])
+        width = -1 + sum((w + 3 for w in self.widths))
         print(self._c('vl'), end="")
         print(color(title.center(width), bg=148, style='bold'), end="")
         print(self._c('vl'))
 
     def _table_head_row(self, l, r, *cols):
         print(self._c(l), end="")
-        for c in range(len(cols)):
-            theme_n = c if len(cols) == len(self.themes) else -1
-            col = cols[c]
+        for col_i, col in enumerate(cols):
+            theme_n = col_i if len(cols) == len(self.themes) else -1
             print(
                 color(
-                    col.upper().center(self.widths[c] + 2),
+                    col.upper().center(self.widths[col_i] + 2),
                     fg=self.themes[theme_n]['fg'],
                     bg=self.themes[theme_n]['bg'],
                     style='bold'
                 ),
                 end=""
             )
-            if c < len(cols) - 1:
+            if col_i < len(cols) - 1:
                 print(
                     color(
                         self._c(r),
@@ -202,7 +187,7 @@ class Printer():
         elif weight == 'lite':
             self._table_bar('lt-l', 'hl-l', 'cx-l', 'rt-l')
         else:
-            raise Exception('weight must be heavy|lite but not {}'.format(weight))
+            raise ValueError(f'weight must be heavy|lite but not {weight}')
 
     def table_close(self):
         self._table_bar('ll', 'hl', 'bt', 'lr')

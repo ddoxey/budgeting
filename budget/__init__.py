@@ -1,27 +1,15 @@
 import re
-import os
 import json
-from datetime import datetime, timedelta
+from datetime import datetime
 from os import environ as env
-import logging
 from pytz import timezone
+from util.repetition import Repetition
 
 NFCU_TZ = 'EST'
-
 ONE_DAY = 86400
 
-DayOfWeekRegex = re.compile(
-    r'(sun|mon|tue|wed|thu|fri|sat)( / ([0-9]+) )?',
-    re.X | re.M | re.S | re.I
-)
 
-DayOfMonthRegex = re.compile(
-    r'( [0-9,]+ )( / ([0-9]+) )?',
-    re.X | re.M | re.S
-)
-
-
-def _is_older(date_a, date_b):
+def is_older(date_a, date_b):
 
     if not isinstance(date_a, datetime):
         mon, day, year = date_a.split('-')
@@ -53,20 +41,12 @@ def _compute_last(trans_type):
     max_days_ago = 365
 
     category = trans_type['category']
-    repetition = trans_type['repetition']
+    repetition = Repetition(trans_type['repetition'])
 
-    field, values, multiplier = _rep_parse(repetition)
-
-    if field == '%d':  # day of the month
-
-        max_days_ago = 1 + multiplier * 31
-
-    elif field == '%a':  # day of the week
-
-        max_days_ago = 1 + multiplier * 7
-
-    else:
-        raise ValueError(f'{category} with unsupported repetition field: {field}')
+    if repetition.field == '%d':  # day of the month
+        max_days_ago = 1 + repetition.repeater * 31
+    elif repetition.field == '%a':  # day of the week
+        max_days_ago = 1 + repetition.repeater * 7
 
     from_date = datetime.now()
 
@@ -91,13 +71,13 @@ def _compute_last(trans_type):
             second=0,
             tzinfo=from_date.tzinfo)
         for ts in timestamps]
-        if d.strftime(field) in values]
+        if d.strftime(repetition.field) in repetition.values]
 
     dates = [{'y': dates[i].strftime('%Y'),
               'm': dates[i].strftime('%m'),
               'd': dates[i].strftime('%d')}
              for i in range(len(dates))
-             if (i + 1) % multiplier == 0]
+             if (i + 1) % repetition.repeater == 0]
 
     if len(dates) == 0:
         raise RuntimeError(f'failed to compute last occurrence of {category}')
@@ -160,9 +140,9 @@ def _find_lasts(history, transaction_types, exceptions, now):
                 last_for[trans_type['category']] = _compute_last(trans_type)
 
     for exception in exceptions:
-        if _is_older(exception['date'], now):
+        if is_older(exception['date'], now):
             if exception['category'] not in last_for \
-               or _is_older(
+               or is_older(
                     last_for[exception['category']],
                     exception['date']):
                 mon, day, year = exception['date'].split('-')
@@ -176,38 +156,6 @@ def _find_lasts(history, transaction_types, exceptions, now):
                     tzinfo=timezone(NFCU_TZ))
 
     return last_for
-
-
-def _rep_parse(repetition):
-
-    field = None
-    values = None
-    multiplier = None
-
-    dow_m = DayOfWeekRegex.match(repetition)
-
-    if dow_m:
-        field = '%a'
-        values = [dow_m.group(1).lower().title()]
-        multiplier = dow_m.group(3)
-
-    else:
-
-        dom_m = DayOfMonthRegex.match(repetition)
-
-        if dom_m:
-            field = '%d'
-            values = [
-                d.zfill(2)
-                for d in dom_m.group(1).strip(',').split(',')]
-            multiplier = dom_m.group(3)
-        else:
-            return None, None, None
-
-    if multiplier is None:
-        multiplier = 1
-
-    return field, values, int(multiplier)
 
 
 class Chokepoint:
@@ -325,7 +273,7 @@ class DateList:
         days_ago = (now - from_date).days
         days = day_span + days_ago
 
-        field, values, multiplier = _rep_parse(repetition)
+        repetition = Repetition(repetition)
 
         from_date = from_date.replace(
             hour=0,
@@ -340,8 +288,7 @@ class DateList:
             tzinfo=timezone(NFCU_TZ))
 
         to_date = datetime.fromtimestamp(
-            int(now.timestamp()) + ((day_span + 1) * ONE_DAY),
-        )
+            int(now.timestamp()) + ((day_span + 1) * ONE_DAY))
 
         to_date = to_date.replace(
             hour=23,
@@ -379,19 +326,20 @@ class DateList:
         self.dates = []
 
         for date in dates:
-            if date['dt'].strftime(field) in values:
+            if date['dt'].strftime(repetition.field) in repetition.values:
                 occurrence_count += 1
-                value = date['dt'].strftime(field)
+                value = date['dt'].strftime(repetition.field)
                 if date['ts'] < now_ts:
                     continue
-                if multiplier == 1 or occurrence_count % multiplier == 0:
+                if repetition.repeater == 1 \
+                  or occurrence_count % repetition.repeater == 0:
                     self.dates.append(date['dt'])
 
         self.from_date = from_date
         self.to_date = to_date
-        self.field = field
+        self.field = repetition.field
         self.value = value
-        self.multiplier = multiplier
+        self.repeater = repetition.repeater
         self.days = days
 
     def json(self):
@@ -401,7 +349,7 @@ class DateList:
                 'dates': [e.strftime(fmt_str) for e in self.dates],
                 'days': self.days,
                 'field': self.field,
-                'multiplier': self.multiplier,
+                'repeater': self.repeater,
                 'range': {
                     'from': self.from_date.strftime(fmt_str),
                     'to': self.to_date.strftime(fmt_str),

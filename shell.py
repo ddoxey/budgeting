@@ -11,10 +11,10 @@ import pickle
 import readline  # MAC
 from datetime import datetime
 from operator import itemgetter
-import inflect
 from ui import Printer
 from budget import Budget
 from colors import STYLES
+from util.repetition import Repetition
 
 
 if 'libedit' in readline.__doc__:
@@ -27,42 +27,6 @@ DOWNLOAD_DIR = os.path.join(os.environ["HOME"], 'Downloads')
 TRANSACTIONS_PKL = 'transactions.pkl'
 EXCEPTIONS_PKL = 'exceptions.pkl'
 THEMES_PKL = 'themes.pkl'
-
-
-class Repetition:
-
-    REGEX = re.compile((
-        r'\A'
-        r'(Sun|Mon|Tue|Wed|Thu|Fri|Sat|\d{1,2})'
-        r'(?:[/](\d+))?'
-        r'\Z'), re.X | re.M | re.S)
-
-    @staticmethod
-    def parse(text):
-        m = Repetition.REGEX.match(text)
-        if m is None:
-            return None
-        return {'when': m.group(1),
-                'repeater': 1 if m.group(2) is None else int(m.group(2))}
-
-    def __init__(self, text):
-        data = self.parse(text)
-        if data is None:
-            raise ValueError(f'Invalid repetition string: {text}')
-        self.when = data['when']
-        self.repeater = data['repeater']
-
-    def __str__(self):
-        when = self.when
-        repeats = 'every'
-        inflector = inflect.engine()
-        if self.repeater > 1:
-            repeats = f'every {inflector.ordinal(self.repeater)}'
-        if when.isdigit():
-            when = inflector.ordinal(int(when))
-            if repeats == 'every':
-                return f'{when} monthly'
-        return f'{repeats} {when}'
 
 
 class Money:
@@ -133,7 +97,7 @@ class Table:
         return {'fg': 105, 'bg': 121, 'style': 'bold'}
 
     def projection_table(self, opening_balance, budget, chokepoints=False):
-        p = Printer([10, '*', 10, 10])
+        p = Printer(10, '*', 10, 10)
         p.banner(f'Opening Balance: {opening_balance}')
         p.table_header('date', 'category', 'amount', 'balance')
         last_mon = None
@@ -158,7 +122,7 @@ class Table:
         if chokepoints:
             chokepoints = budget.get_chokepoints()
 
-            p = Printer([10, 30])
+            p = Printer(10, 30)
             p.table_header(
                 'date',
                 'balance',
@@ -196,7 +160,7 @@ class Table:
         columns_n = 3
         rows_n = math.ceil(len(categories) / columns_n)
 
-        ptr = Printer([15 for n in range(columns_n)])
+        ptr = Printer(15 for n in range(columns_n))
 
         ptr.table_header(title='Categories')
 
@@ -223,7 +187,7 @@ class Table:
     def exceptions_table(self, exceptions: list):
         """Display the exceptions table.
         """
-        ptr = Printer([10, '*', 10])
+        ptr = Printer(10, '*', 10)
         ptr.table_header(title='Exceptions')
 
         for exception in exceptions:
@@ -245,7 +209,7 @@ class Table:
             col_sizes = ['10', 14,  10]
             col_headers = ['Category', 'Repeats', 'Amount']
 
-        ptr = Printer(col_sizes)
+        ptr = Printer(*col_sizes)
         ptr.table_header(title='Transaction Types')
         ptr.table_row(*col_headers)
         ptr.table_boundary(weight='lite')
@@ -272,7 +236,7 @@ class Table:
     def theme_table(self, themes):
         """Display the theme table.
         """
-        ptr = Printer(['*', 10,  10, 10])
+        ptr = Printer('*', 10,  10, 10)
         ptr.table_header(title='Themes')
 
         ptr.table_row('Category', 'FG', 'BG', 'Style')
