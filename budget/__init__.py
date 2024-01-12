@@ -36,7 +36,7 @@ def is_older(date_a, date_b):
     return date_a < date_b
 
 
-def _compute_last(trans_type):
+def compute_last(trans_type):
 
     max_days_ago = 365
 
@@ -92,11 +92,11 @@ def _compute_last(trans_type):
         tzinfo=timezone(NFCU_TZ))
 
 
-def _find_lasts(history, transaction_types, exceptions, now):
+def find_lasts(history, transaction_types, exceptions, now):
 
     last_for = {}
 
-    def _matches(transaction, conditions):
+    def matches(transaction, conditions):
         for field in conditions:
             if field in transaction:
                 regex = conditions[field]
@@ -107,9 +107,9 @@ def _find_lasts(history, transaction_types, exceptions, now):
                 return False
         return True
 
-    def _categorize(transaction):
+    def categorize(transaction):
         for trans_type in transaction_types:
-            if _matches(transaction, trans_type['conditions']):
+            if matches(transaction, trans_type['conditions']):
                 return trans_type['category']
         return None
 
@@ -118,7 +118,7 @@ def _find_lasts(history, transaction_types, exceptions, now):
         if len(last_for) == len(transaction_types):
             break
 
-        category = _categorize(transaction)
+        category = categorize(transaction)
 
         if category is None or category in last_for:
             continue
@@ -137,7 +137,7 @@ def _find_lasts(history, transaction_types, exceptions, now):
     if len(last_for) != len(transaction_types):
         for trans_type in transaction_types:
             if trans_type['category'] not in last_for:
-                last_for[trans_type['category']] = _compute_last(trans_type)
+                last_for[trans_type['category']] = compute_last(trans_type)
 
     for exception in exceptions:
         if is_older(exception['date'], now):
@@ -189,6 +189,7 @@ class ChokepointList:
     def __init__(self, transaction_types, events):
 
         self.iteration_n = 0
+        self.smallest = None
 
         major_expense = {
             'category': None,
@@ -470,7 +471,7 @@ class Budget:
 
         now = datetime.now(tz=timezone(NFCU_TZ))
 
-        self.last_occurrence_of = _find_lasts(
+        self.last_occurrence_of = find_lasts(
             history,
             transaction_types,
             exceptions,

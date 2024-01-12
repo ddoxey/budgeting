@@ -23,9 +23,10 @@ class Cache:
         """
         if 'exceptions' not in self.filenames:
             raise RuntimeError('No filename provided for "exceptions"')
-        exceptions = None
-        with open(self.cache_file(self.filenames['exceptions']), 'rb') as pkl_file:
-            exceptions = pickle.load(pkl_file)
+        exceptions = []
+        if os.path.exists(self.cache_file(self.filenames['exceptions'])):
+            with open(self.cache_file(self.filenames['exceptions']), 'rb') as pkl_file:
+                exceptions = pickle.load(pkl_file)
 
         if exceptions is None:
             raise RuntimeError(f'Unable to read: {self.filenames["exceptions"]}')
@@ -60,9 +61,10 @@ class Cache:
         """
         if 'transactions' not in self.filenames:
             raise RuntimeError('No filename provided for "transactions"')
-        transactions = None
-        with open(self.cache_file(self.filenames['transactions']), 'rb') as pkl_file:
-            transactions = pickle.load(pkl_file)
+        transactions = []
+        if os.path.exists(self.cache_file(self.filenames['transactions'])):
+            with open(self.cache_file(self.filenames['transactions']), 'rb') as pkl_file:
+                transactions = pickle.load(pkl_file)
         if transactions is None:
             raise RuntimeError(f'Unable to read: {self.filenames["transactions"]}')
         return transactions
@@ -82,9 +84,10 @@ class Cache:
         """
         if 'themes' not in self.filenames:
             raise RuntimeError('No filename provided for "themes"')
-        themes = None
-        with open(self.cache_file(self.filenames['themes']), 'rb') as pkl_file:
-            themes = pickle.load(pkl_file)
+        themes = {}
+        if os.path.exists(self.cache_file(self.filenames['themes'])):
+            with open(self.cache_file(self.filenames['themes']), 'rb') as pkl_file:
+                themes = pickle.load(pkl_file)
         if themes is None:
             raise RuntimeError(f'Unable to read: {self.filenames["themes"]}')
         return themes
