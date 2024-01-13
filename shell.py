@@ -195,6 +195,27 @@ class Tables:
         ptr.table_close()
 
 
+    def lasts_table(self, occurrences):
+        """Display the last occurrences table.
+        """
+        ptr = Printer('*', 10)
+        ptr.table_header(title='Last Occurrences')
+
+        ptr.table_row('Category', 'Date')
+        ptr.table_boundary(weight='lite')
+
+        categories = sorted(occurrences.keys())
+
+        for category in categories:
+            theme = self.get(category)
+            occurrence = occurrences.get(category)
+            ptr.set_theme(**theme)
+            ptr.table_row(
+                category,
+                occurrences.get(category))
+        ptr.table_close()
+
+
 class BudgetShell(cmd.Cmd):
     intro = 'Type help or ? to list commands.'
     prompt = 'Budget: '
@@ -697,6 +718,19 @@ The optional -c will include a table of chokepoints."""
         print(f'Historical event count: {len(self.history)}')
         print(f'Downloads dir: {History.download_dir()}')
         print(f'Cache dir: {self.cache.cache_dir()}')
+
+    def do_lasts(self, line):
+        """Display a table of last occurrences for each transaction type.
+
+These dates are parsed from the downloaded transaction history or may be provided in an exception.
+        """
+        budget = Budget(0,
+                        self.transaction_types,
+                        self.exceptions,
+                        self.history,
+                        365)
+        occurrences = budget.get_last_occurrences()
+        self.tables.lasts_table(occurrences)
 
     def do_exit(self, line):
         """Save changes and exit."""
