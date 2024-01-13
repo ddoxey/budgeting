@@ -97,15 +97,18 @@ def find_lasts(history, transaction_types, exceptions, now):
     last_for = {}
 
     def matches(transaction, conditions):
+        hit_count = 0
+        condition_count = 0
         for field in conditions:
             if field in transaction:
-                regex = conditions[field]
-                value = transaction[field]
-                if not re.search(regex, value, re.X | re.M | re.S | re.I):
-                    return False
-            else:
-                return False
-        return True
+                if field in conditions:
+                    regex = conditions[field]
+                    if len(regex) > 0:
+                        condition_count += 1
+                        value = transaction[field]
+                        if re.search(regex, value, re.X | re.M | re.S | re.I):
+                            hit_count += 1
+        return hit_count > 0 and condition_count == hit_count
 
     def categorize(transaction):
         for trans_type in transaction_types:
