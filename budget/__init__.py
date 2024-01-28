@@ -126,7 +126,7 @@ def find_lasts(history, transaction_types, exceptions, now):
         if category is None or category in last_for:
             continue
 
-        mon, day, year = transaction['date'].split('/')
+        mon, day, year = transaction['booking_date'].split('/')
 
         last_for[category] = datetime(
             year=int(year),

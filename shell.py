@@ -241,7 +241,7 @@ class BudgetShell(cmd.Cmd):
         budget = Budget(0,
                         self.transaction_types,
                         self.exceptions,
-                        self.history,
+                        self.history['transactions'],
                         365)
         events = budget.get_events(category=cat)
         return [event.get('date') for event in events]
@@ -706,18 +706,21 @@ The optional -c will include a table of chokepoints."""
                 self.balance,
                 self.transaction_types,
                 self.exceptions,
-                self.history,
+                self.history['transactions'],
                 int(days))
             self.tables.projection_table(opening_balance, budget, chokepoints)
 
     def do_status(self, line):
         """Display a summary of status parameters."""
+        history_file = self.history['last-modified'] \
+                     + f' "{os.path.basename(self.history["filename"])}"'
         print(f'Current balance: {Money(self.balance)}')
         print(f'Category count: {len(self.categories)}')
         print(f'Exception count: {len(self.exceptions)}')
-        print(f'Historical event count: {len(self.history)}')
-        print(f'Downloads dir: {History.download_dir()}')
         print(f'Cache dir: {self.cache.cache_dir()}')
+        print(f'Downloads dir: {History.download_dir()}')
+        print(f'Historical data: {history_file}')
+        print(f'Historical event count: {len(self.history["transactions"])}')
 
     def do_lasts(self, line):
         """Display a table of last occurrences for each transaction type.
@@ -727,7 +730,7 @@ These dates are parsed from the downloaded transaction history or may be provide
         budget = Budget(0,
                         self.transaction_types,
                         self.exceptions,
-                        self.history,
+                        self.history['transactions'],
                         365)
         occurrences = budget.get_last_occurrences()
         self.tables.lasts_table(occurrences)
