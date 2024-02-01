@@ -226,16 +226,24 @@ class BudgetShell(cmd.Cmd):
         self.transaction_types_changed = False
         self.exceptions_changed = False
         self.balance = 0.0
+        self.do_reload(None)
+
+    def do_reload(self, line):
+        """Reload cached data and history from the transactions CSV."""
         self.cache = Cache(name='budget',
                            themes=THEMES_PKL,
                            transactions=TRANSACTIONS_PKL,
                            exceptions=EXCEPTIONS_PKL)
         self.tables = Tables(self.cache.read_theme())
+        print(f'loaded: {THEMES_PKL}')
         self.transaction_types = self.cache.read_transaction_type()
+        print(f'loaded: {TRANSACTIONS_PKL}')
         self.categories = sorted([trans['category']
                                  for trans in self.transaction_types])
         self.exceptions = self.cache.read_exception(self.categories)
+        print(f'loaded: {EXCEPTIONS_PKL}')
         self.history = History.read_transaction_history()
+        print(f'loaded: {os.path.basename(self.history["filename"])}')
 
     def get_predicted_dates(self, cat):
         budget = Budget(0,
@@ -745,13 +753,17 @@ These dates are parsed from the downloaded transaction history or may be provide
             self.cache.update_exception(self.exceptions)
         return True
 
+    def do_x(self, line):
+        """Save changes and exit."""
+        return self.do_exit(line)
+
     def do_quit(self, line):
         """Terminate the program."""
         return True
 
     def do_q(self, line):
         """Terminate the program."""
-        return True
+        return self.do_quit(line)
 
     def do_clear(self, line):
         """Clear the screen."""
