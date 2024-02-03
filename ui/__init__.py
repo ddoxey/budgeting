@@ -1,5 +1,6 @@
 import re
 import os
+import types
 from colors import color
 
 
@@ -10,16 +11,20 @@ class Printer:
     money = re.compile(r'[-]?[0-9]+[.][0-9]{2}')
 
     def __init__(self, *column_widths):
+        if len(column_widths) == 0:
+            raise RuntimeError(f'{__class__.__name__} Requires column widths')
         self.rows, self.columns = None, None
         with os.popen('stty size', 'r') as stty:
             for line in stty:
                 self.rows, self.columns = [int(n) for n in line.split()]
                 break
-        self.set_column_widths(list(column_widths))
+        if isinstance(column_widths[0], types.GeneratorType):
+            self.set_column_widths(list(*column_widths))
+        else:
+            self.set_column_widths(list(column_widths))
         self.set_theme()
 
     def set_column_widths(self, column_widths):
-
         column_pad = 2
         column_sep = 1
 
