@@ -6,6 +6,7 @@ import sys
 import cmd
 import math
 import readline  # MAC
+from datetime import datetime
 from operator import itemgetter
 from ui import Printer
 from budget import Budget
@@ -21,14 +22,11 @@ if 'libedit' in readline.__doc__:
 else:
     readline.parse_and_bind('tab: complete')  # Linux
 
-TRANSACTIONS_PKL = 'transactions.pkl'
-EXCEPTIONS_PKL = 'exceptions.pkl'
-THEMES_PKL = 'themes.pkl'
-
 
 class Tables:
 
-    def __init__(self, themes):
+    def __init__(self, profile, themes):
+        self.profile = profile
         self.themes = themes
 
     def get(self, key):
@@ -37,9 +35,9 @@ class Tables:
         return {'fg': 105, 'bg': 121, 'style': 'bold'}
 
     def projection_table(self, opening_balance, budget, chokepoints=False):
-        p = Printer(10, '*', 10, 10)
-        p.banner(f'Opening Balance: {opening_balance}')
-        p.table_header('date', 'category', 'amount', 'balance')
+        ptr = Printer(10, '*', 10, 10)
+        ptr.banner(f'Opening Balance: {opening_balance}')
+        ptr.table_header('date', 'category', 'amount', 'balance')
         last_mon = None
         for event in budget:
             if event.get('amount') != 0:
@@ -47,23 +45,22 @@ class Tables:
                 if last_mon is None:
                     last_mon = this_mon
                 if this_mon != last_mon:
-                    p.table_boundary(weight='lite')
+                    ptr.table_boundary(weight='lite')
                 last_mon = this_mon
                 theme = self.get(event.get('category'))
-                p.set_theme(**theme)
-                p.table_row(
+                ptr.set_theme(**theme)
+                ptr.table_row(
                     event.get('date'),
                     event.get('category'),
                     f'{event.get("amount"):0.2f}',
-                    f'{event.get("balance"):0.2f}'
-                )
-        p.table_close()
+                    f'{event.get("balance"):0.2f}')
+        ptr.table_close()
 
         if chokepoints:
             chokepoints = budget.get_chokepoints()
 
-            p = Printer(10, 30)
-            p.table_header(
+            ptr = Printer(10, 30)
+            ptr.table_header(
                 'date',
                 'balance',
                 title="Eye of the needle: " + str(chokepoints.eye()))
@@ -75,13 +72,13 @@ class Tables:
             n = 0
 
             for chokepoint in chokepoints:
-                p.set_theme(**theme[n % 2])
+                ptr.set_theme(**theme[n % 2])
                 n += 1
-                p.table_row(
+                ptr.table_row(
                     chokepoint.get('date'),
                     f'{chokepoint.get("balance"):0.2f}'
                 )
-            p.table_close()
+            ptr.table_close()
 
         days = budget.get_days()
         months_elapsed = int(days / 30)
@@ -102,7 +99,7 @@ class Tables:
 
         ptr = Printer(15 for n in range(columns_n))
 
-        ptr.table_header(title='Categories')
+        ptr.table_header(title=f'{self.profile} Categories')
 
         def get(r_n, c_n):
             idx = r_n + (c_n * rows_n)
@@ -128,7 +125,7 @@ class Tables:
         """Display the exceptions table.
         """
         ptr = Printer(10, '*', 10)
-        ptr.table_header(title='Exceptions')
+        ptr.table_header(title=f'{self.profile} Exceptions')
 
         for exception in exceptions:
             theme = self.get(exception.get('category'))
@@ -143,14 +140,14 @@ class Tables:
         """Display the transaction types table.
         """
         col_sizes = ['10', 14,  10, '*', 12]
-        col_headers = ['Category', 'Repeats', 'Amount', 'Match Description', 'Match Amount']
-
+        col_headers = ['Category', 'Repeats', 'Amount',
+                       'Match Description', 'Match Amount']
         if abbreviated:
             col_sizes = ['10', 14,  10]
             col_headers = ['Category', 'Repeats', 'Amount']
 
         ptr = Printer(*col_sizes)
-        ptr.table_header(title='Transaction Types')
+        ptr.table_header(title=f'{self.profile} Transaction Types')
         ptr.table_row(*col_headers)
         ptr.table_boundary(weight='lite')
 
@@ -177,7 +174,7 @@ class Tables:
         """Display the theme table.
         """
         ptr = Printer('*', 10,  10, 10)
-        ptr.table_header(title='Themes')
+        ptr.table_header(title=f'{self.profile} Themes')
 
         ptr.table_row('Category', 'FG', 'BG', 'Style')
         ptr.table_boundary(weight='lite')
@@ -194,12 +191,34 @@ class Tables:
                 theme.get('style'))
         ptr.table_close()
 
+    def profile_table(self, profiles):
+        """Display the profile table.
+        """
+        ptr = Printer(10, '*')
+        ptr.table_header(title=f'{self.profile} Profiles')
+
+        ptr.table_row('Name', 'Description')
+        ptr.table_boundary(weight='lite')
+
+        theme = [
+            {'fg': 'black', 'bg': 230},
+            {'fg': 'black', 'bg': 'white'},
+        ]
+        n = 0
+
+        for profile in profiles:
+            ptr.set_theme(**theme[n % 2])
+            n += 1
+            ptr.table_row(
+                profile.get('name'),
+                profile.get('description'))
+        ptr.table_close()
 
     def lasts_table(self, occurrences):
         """Display the last occurrences table.
         """
         ptr = Printer('*', 10)
-        ptr.table_header(title='Last Occurrences')
+        ptr.table_header(title=f'{self.profile} Last Occurrences')
 
         ptr.table_row('Category', 'Date')
         ptr.table_boundary(weight='lite')
@@ -216,34 +235,60 @@ class Tables:
         ptr.table_close()
 
 
+class Util:
+
+    @staticmethod
+    def current_exceptions(exceptions, categories):
+
+        def update_epoch(exc: dict):
+            """Add an 'epoch' Property.
+            """
+            date = datetime.strptime(exc['date'], '%m-%d-%Y')
+            exc['epoch'] = int(date.strftime('%s'))
+            return exc
+
+        threshold = 15  # wtf?
+        exceptions = sorted([update_epoch(record)
+                             for record in exceptions],
+                            key=itemgetter('epoch'))
+
+        return [exc for exc in exceptions
+                if exc['epoch'] >= threshold
+                and exc.get('category') in categories]
+
+
 class BudgetShell(cmd.Cmd):
     intro = 'Type help or ? to list commands.'
     prompt = 'Budget: '
 
     def __init__(self, completekey='tab', stdin=None, stdout=None):
         super().__init__(completekey, stdin, stdout)
-        self.themes_changed = False
-        self.transaction_types_changed = False
-        self.exceptions_changed = False
-        self.balance = 0.0
+        self.changes = {}
+        self.profile = None
         self.do_reload(None)
 
     def do_reload(self, line):
         """Reload cached data and history from the transactions CSV."""
+        self.balance = 0.0
+        if self.profile is None:
+            self.profile = 'Main'
         self.cache = Cache(name='budget',
-                           themes=THEMES_PKL,
-                           transactions=TRANSACTIONS_PKL,
-                           exceptions=EXCEPTIONS_PKL)
-        self.tables = Tables(self.cache.read_theme())
-        print(f'loaded: {THEMES_PKL}')
-        self.transaction_types = self.cache.read_transaction_type()
-        print(f'loaded: {TRANSACTIONS_PKL}')
-        self.categories = sorted([trans['category']
-                                 for trans in self.transaction_types])
-        self.exceptions = self.cache.read_exception(self.categories)
-        print(f'loaded: {EXCEPTIONS_PKL}')
+                           profile=self.profile)
+        self.tables = Tables(self.profile, self.cache.read('themes'))
+        self.changes['themes'] = False
+        self.profiles = self.cache.read('profiles',
+                                        [{'name': 'Main',
+                                          'description': 'Default Profile'}])
+        self.changes['profiles'] = False
+        self.transaction_types = self.cache.read('transactions', [])
+        self.changes['transaction_types'] = False
+        self.categories = sorted([trans.get('category')
+                                  for trans in self.transaction_types])
+        self.exceptions = Util.current_exceptions(
+                            self.cache.read('exceptions'),
+                            self.categories)
+        self.changes['exceptions'] = False
         self.history = History.read_transaction_history()
-        print(f'loaded: {os.path.basename(self.history["filename"])}')
 
     def get_predicted_dates(self, cat):
         budget = Budget(0,
@@ -253,6 +298,29 @@ class BudgetShell(cmd.Cmd):
                         365)
         events = budget.get_events(category=cat)
         return [event.get('date') for event in events]
+
+    def update_profile(self, arg_str):
+        update_profile_regex = re.compile((
+            r'\A'
+            r'   (\w+) \s+ '
+            r'   (\w+.*) '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = update_profile_regex.match(arg_str)
+        if m is None:
+            print(f'Unable parse profile update: {arg_str}')
+            return
+        name = m.group(1)
+        desc = m.group(2).strip()
+        for profile_i, profile in enumerate(self.profiles):
+            if profile.get('name') == name:
+                self.profiles[profile_i] = {'name': name, 'description': desc}
+                print(f'updated profile {name}: {desc}')
+                self.changes['profiles'] = True
+                return
+        self.profiles.append({'name': name, 'description': desc})
+        print(f'Added profile {name}: {desc}')
+        self.changes['profiles'] = True
+        return
 
     def update_theme(self, arg_str):
         update_theme_regex = re.compile((
@@ -294,13 +362,13 @@ class BudgetShell(cmd.Cmd):
             self.tables.themes[cat]['bg'] = int(bg)
             self.tables.themes[cat]['style'] = style
             print(f'Updated theme {cat}: {fg}, {bg}, {style}')
-            self.themes_changed = True
+            self.changes['themes'] = True
             return
         self.tables.themes[cat] = {'fg': int(fg),
-                                  'bg': int(bg),
-                                  'style': style}
+                                   'bg': int(bg),
+                                   'style': style}
         print(f'Added theme {cat}: {fg}, {bg}, {style}')
-        self.themes_changed = True
+        self.changes['themes'] = True
         return
 
     def update_exception(self, arg_str):
@@ -324,13 +392,13 @@ class BudgetShell(cmd.Cmd):
             if exception['category'] == cat and exception['date'] == date:
                 print(f'Update exception {cat}: {amount} on {date}')
                 exception['amount'] = float(Money(amount))
-                self.exceptions_changed = True
+                self.changes['exceptions'] = True
                 return
         print(f'Add exception {cat}: {amount} on {date}')
         self.exceptions.append({'date': date,
                                 'category': cat,
                                 'amount': float(Money(amount))})
-        self.exceptions_changed = True
+        self.changes['exceptions'] = True
         return
 
     def update_transaction(self, arg_str):
@@ -359,34 +427,82 @@ class BudgetShell(cmd.Cmd):
         if Money.parse(amount) is None:
             print(f'Invalid monetary value: {amount}')
             return
-        description_regex = "" if m.group(4) is None else m.group(4)
+        desc_regex = "" if m.group(4) is None else m.group(4)
         debit_regex = "" if m.group(5) is None else m.group(5)
         for transaction_type in self.transaction_types:
             if transaction_type['category'] == cat:
                 transaction_type['repetition'] = repetition
                 transaction_type['amount'] = float(Money(amount))
-                transaction_type['conditions']['description'] = description_regex
+                transaction_type['conditions']['description'] = desc_regex
                 transaction_type['conditions']['debit'] = debit_regex
                 print(f'Updated transaction {cat}: {amount} on {repetition}')
-                self.transaction_types_changed = True
+                self.changes['transaction_types'] = True
                 return
         self.transaction_types.append({'category': cat,
                                        'repetition': repetition,
                                        'amount': float(Money(amount)),
                                        'conditions': {
-                                           'description': description_regex,
+                                           'description': desc_regex,
                                            'debit': debit_regex
                                        }})
         self.categories = sorted([trans['category']
                                  for trans in self.transaction_types])
         print(f'Added a new transaction {cat}: {amount} on {repetition}')
-        self.transaction_types_changed = True
+        self.changes['transaction_types'] = True
         return
+
+    def copy_profile(self, arg_str):
+        copy_profile_regex = re.compile((
+            r'\A'
+            r'   (\w+) \s+ '
+            r'   (\w+) '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = copy_profile_regex.match(arg_str)
+        if m is None:
+            print(f'Unable parse profile copy: {arg_str}')
+            return
+        from_name = m.group(1)
+        to_name = m.group(2)
+        profiles = [profile for profile in self.profiles
+                    if profile.get('name') == from_name]
+        if len(profiles) == 0:
+            print(f'Unrecognized profile: {from_name}', file=sys.stderr)
+            return
+        if from_name == to_name:
+            print(f'Cannot copy {from_name} onto itself', file=sys.stderr)
+            return
+        self.cache.copy(from_name, to_name)
+        self.profiles.append(
+            {'name': to_name,
+             'description': f'Copy of {profiles[0]["description"]}'})
+        self.changes['profiles'] = True
+        self.do_save('profiles')
+
+    def do_copy(self, arg_str):
+        """Create a copy of a profile."""
+        if ' ' not in arg_str:
+            print(f'Invalid copy command: {arg_str}', file=sys.stderr)
+            return
+        copy_type, arg_str = re.split(r'\s+', arg_str.strip(), 1)
+        if copy_type == 'profile':
+            self.copy_profile(arg_str)
+            return
+        print(f'Unsupported copy type: {copy_type}', file=sys.stderr)
 
     def do_update(self, arg_str):
         """Update the specified configuration.
 
-Usage: update <theme|exception|transaction> <cat> <parameters ...>
+Usage: update <profile|theme|exception|transaction> <cat> <parameters ...>
+
+Profile updates:
+    update profile <name> <description>
+
+<name>        - A single token profile name
+<description> - A short description of the profile
+
+The transaction types are grouped by profile which permits the user to
+configure multiple budgets and run them seperately.
+
 
 Theme updates:
     update theme <cat> <fg> <bg> <style>
@@ -409,7 +525,7 @@ Exceptions are cases where the amount on a particular transaction
 category deviates from the regularly scheduled amount.
 
 Transaction updates:
-    update transaction <cat> <when>[/<repeat>] <amount> <desc-regex> <amount-regex>
+    update transaction <cat> <when>[/<repeat>] <amount> <desc> <amount>
 
 <cat>     - transaction category
 <when>    - day of month, or day of week (Sun, Mon, ...)
@@ -421,13 +537,17 @@ Transaction updates:
 <amount> - regular amount for this transaction
            (Include unary minus for debit values.)
 
-<desc-regex> - regular expression value that matches on the transaction Description
-               Note: Must use single quoted Python r-string syntax,
-                     such as: r'[ ]Mortgage[ ]Payment[ ]'
+<desc> - regular expression value that matches on the transaction
+         Description
 
-<amount-regex> - regular expression value that matches on the transaction Debit
-                 Note: Must use single quoted Python r-string syntax,
-                       such as: r'[.]42$'
+         Note: Must use single quoted Python r-string syntax,
+               such as: r'[ ]Mortgage[ ]Payment[ ]'
+
+<amount> - regular expression value that matches on the transaction
+           Debit
+
+           Note: Must use single quoted Python r-string syntax,
+                 such as: r'[.]42$'
 
 Transactions are scheduled budget events, such as Rent, Payday, etc.
 """
@@ -435,6 +555,9 @@ Transactions are scheduled budget events, such as Rent, Payday, etc.
             print(f'Invalid update command: {arg_str}', file=sys.stderr)
             return
         update_type, arg_str = re.split(r'\s+', arg_str.strip(), 1)
+        if update_type == 'profile':
+            self.update_profile(arg_str)
+            return
         if update_type == 'theme':
             self.update_theme(arg_str)
             return
@@ -448,7 +571,7 @@ Transactions are scheduled budget events, such as Rent, Payday, etc.
         return
 
     def complete_update(self, text, state, begidx, endidx):
-        update_types = ['transaction', 'exception', 'theme']
+        update_types = ['transaction', 'exception', 'theme', 'profile']
         tokens = re.split(r'\s+', state.strip())
         if len(tokens) == 1:
             return update_types
@@ -483,7 +606,7 @@ Transactions are scheduled budget events, such as Rent, Payday, etc.
                             if style.startswith(theme_style)]
         return None
 
-    def do_save(self, arg_str):
+    def do_save(self, arg_str=""):
         """Save changed data to disk.
 
 Usage: save [<themes|transactions|exceptions>]
@@ -493,19 +616,24 @@ All changed data will be saved if the optional save type is omitted."""
                       for save_type in re.split(r'\s+', arg_str.strip())
                       if len(save_type) > 0]
         if len(save_types) == 0:
-            save_types = ['themes', 'transactions', 'exceptions']
+            save_types = ['themes', 'transactions', 'exceptions', 'profiles']
         for save_type in save_types:
+            if save_type == 'profiles':
+                if self.changes.get('profiles', False):
+                    self.cache.write('profiles', self.profiles)
+                continue
             if save_type == 'themes':
-                if self.themes_changed:
-                    self.cache.update_theme(self.tables.themes)
+                if self.changes.get('themes', False):
+                    self.cache.write('theme', self.tables.themes)
                 continue
             if save_type == 'exceptions':
-                if self.exceptions_changed:
-                    self.cache.update_exception(self.exceptions)
+                if self.changes.get('exceptions', False):
+                    self.cache.write('exception', self.exceptions)
                 continue
             if save_type == 'transactions':
-                if self.transaction_types_changed:
-                    self.cache.update_transaction_type(self.transaction_types)
+                if self.changes.get('transaction_types', False):
+                    self.cache.write('transaction_type',
+                                     self.transaction_types)
                 continue
             print(f'Unrecognized save type: {save_type}', file=sys.stderr)
 
@@ -520,6 +648,31 @@ All changed data will be saved if the optional save type is omitted."""
                 return [opt for opt in save_types
                         if opt.startswith(save_type)]
         return None
+
+    def delete_profile(self, arg_str):
+        del_theme_regex = re.compile((
+            r'\A'
+            r'   (\w+) '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = del_theme_regex.match(arg_str)
+        if m is not None:
+            name = m.group(1)
+            if name == 'Main':
+                print(f'Profile "{name}" cannot be deleted', file=sys.stderr)
+                return
+            profiles = [profile for profile in self.profiles
+                        if profile.get('name') != name]
+            if len(profiles) < len(self.profiles):
+                self.cache.delete(profile=name)
+                self.profiles = profiles
+                self.changes['profiles'] = True
+                self.do_save('profiles')
+                print(f'Removed profile: {name}')
+                if name == self.profile:
+                    self.profile = None
+                    self.do_reload(None)
+                return
+        print(f'Profile not found: {name}', file=sys.stderr)
 
     def delete_theme(self, arg_str):
         del_theme_regex = re.compile((
@@ -538,12 +691,12 @@ All changed data will be saved if the optional save type is omitted."""
                     return
                 self.tables.themes = {}
                 print('Removed all themes')
-                self.themes_changed = True
+                self.changes['themes'] = True
                 return
             if cat in self.tables.themes:
                 del self.tables.themes[cat]
                 print(f'Removed {cat} theme')
-                self.themes_changed = True
+                self.changes['themes'] = True
             return
         print(f'Invalid theme del command: {arg_str}', file=sys.stderr)
 
@@ -568,9 +721,10 @@ All changed data will be saved if the optional save type is omitted."""
             else:
                 self.exceptions = [exception
                                    for exception in self.exceptions
-                                   if not (exception['category'] == cat and exception['date'] == date)]
+                                   if not (exception['category'] == cat
+                                           and exception['date'] == date)]
                 print(f'Removed {cat} exception for {date}')
-            self.exceptions_changed = True
+            self.changes['exceptions'] = True
             return
         print(f'Invalid exception del command: {arg_str}', file=sys.stderr)
 
@@ -585,15 +739,16 @@ All changed data will be saved if the optional save type is omitted."""
             if cat not in self.categories:
                 print(f'Unrecognized category: {cat}', file=sys.stderr)
                 return
-            self.transaction_types = [transaction_type
-                                      for transaction_type in self.transaction_types
-                                      if transaction_type['category'] != cat]
+            self.transaction_types = [
+                transaction_type
+                for transaction_type in self.transaction_types
+                if transaction_type['category'] != cat]
             self.delete_theme(cat)
             self.delete_exception(f'{cat} *')
             self.categories = sorted([trans['category']
                                      for trans in self.transaction_types])
             print(f'Removed {cat} transaction')
-            self.transaction_types_changed = True
+            self.changes['transaction_types'] = True
             return
         print(f'Invalid transactions del command: {arg_str}', file=sys.stderr)
 
@@ -601,6 +756,9 @@ All changed data will be saved if the optional save type is omitted."""
         """Delete configuration.
 
 Usage: del <theme|exception|transaction> <parameters ...>
+
+Delete a profile:
+    del profile <name>
 
 Delete a theme:
     del theme <cat>
@@ -620,6 +778,9 @@ Delete a transaction type:
             print(f'Invalid del command: {arg_str}', file=sys.stderr)
             return
         del_type, arg_str = re.split(r'\s+', arg_str.strip(), 1)
+        if del_type == 'profile':
+            self.delete_profile(arg_str)
+            return
         if del_type == 'theme':
             self.delete_theme(arg_str)
             return
@@ -632,7 +793,7 @@ Delete a transaction type:
         print(f'Unrecognized del type: {del_type}', file=sys.stderr)
 
     def complete_del(self, text, state, begidx, endidx):
-        del_types = ['transaction', 'theme', 'exception']
+        del_types = ['transaction', 'theme', 'exception', 'profile']
         tokens = re.split(r'\s+', state.strip())
         if len(tokens) == 1:
             return del_types
@@ -656,6 +817,23 @@ Delete a transaction type:
                         if cat_date.startswith(date)]
 
         return None
+
+    def do_profile(self, line):
+        """Set or display the current budget profile.
+
+Usage: profile [<name>]
+
+Sets the current profile if a new value is provided."""
+        name = line.strip()
+        if len(name) == 0:
+            print(f'Profile: {self.profile}')
+        else:
+            for profile in self.profiles:
+                if name == profile.get('name'):
+                    self.profile = name
+                    self.do_reload(None)
+                    return
+            print(f'Invalid profile name: {name}', file=sys.stderr)
 
     def do_balance(self, line):
         """Set or display the current account balance.
@@ -684,7 +862,8 @@ Sets the account balance if a new value is provided."""
 
     def do_trans(self, line):
         """Show an abbreviated table of transaction types."""
-        self.tables.transactions_table(self.transaction_types, abbreviated=True)
+        self.tables.transactions_table(self.transaction_types,
+                                       abbreviated=True)
 
     def do_transactions(self, line):
         """Show a table of transaction types."""
@@ -693,6 +872,10 @@ Sets the account balance if a new value is provided."""
     def do_themes(self, line):
         """Show a table of highlighting themes."""
         self.tables.theme_table(self.tables.themes)
+
+    def do_profiles(self, line):
+        """Show a table of budget prfiles."""
+        self.tables.profile_table(self.profiles)
 
     def do_run(self, argstr):
         """Run the budget for the specified number of days.
@@ -720,20 +903,21 @@ The optional -c will include a table of chokepoints."""
 
     def do_status(self, line):
         """Display a summary of status parameters."""
-        history_file = self.history['last-modified'] \
-                     + f' "{os.path.basename(self.history["filename"])}"'
-        print(f'Current balance: {Money(self.balance)}')
-        print(f'Category count: {len(self.categories)}')
-        print(f'Exception count: {len(self.exceptions)}')
+        print(f'Profile: {self.profile}')
+        print(f'Balance: {Money(self.balance)}')
+        print(f'Categories: {len(self.categories)}')
+        print(f'Exceptions: {len(self.exceptions)}')
         print(f'Cache dir: {self.cache.cache_dir()}')
-        print(f'Downloads dir: {History.download_dir()}')
-        print(f'Historical data: {history_file}')
-        print(f'Historical event count: {len(self.history["transactions"])}')
+        print(f'Download dir: {History.download_dir()}')
+        print(f'History date: {self.history["last-modified"]}')
+        print(f'History data: {os.path.basename(self.history["filename"])}')
+        print(f'History event count: {len(self.history["transactions"])}')
 
     def do_lasts(self, line):
         """Display a table of last occurrences for each transaction type.
 
-These dates are parsed from the downloaded transaction history or may be provided in an exception.
+These dates are parsed from the downloaded transaction history or may be
+provided in an exception.
         """
         budget = Budget(0,
                         self.transaction_types,
@@ -745,12 +929,7 @@ These dates are parsed from the downloaded transaction history or may be provide
 
     def do_exit(self, line):
         """Save changes and exit."""
-        if self.themes_changed:
-            self.cache.update_theme(self.tables.themes)
-        if self.transaction_types_changed:
-            self.cache.update_transaction_type(self.transaction_types)
-        if self.exceptions_changed:
-            self.cache.update_exception(self.exceptions)
+        self.do_save()
         return True
 
     def do_x(self, line):
