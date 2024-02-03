@@ -234,6 +234,25 @@ class Tables:
                 occurrences.get(category))
         ptr.table_close()
 
+    def dict_table(self, title, data):
+        """Display dict key/val in two columns.
+        """
+        col1_width = max(len(key) for key in data)
+        ptr = Printer(col1_width, '*')
+        ptr.table_header(title=f'{self.profile} {title}')
+
+        theme = [
+            {'fg': 'black', 'bg': 230},
+            {'fg': 'black', 'bg': 'white'},
+        ]
+        n = 0
+
+        for key, val in data.items():
+            ptr.set_theme(**theme[n % 2])
+            n += 1
+            ptr.table_row(f'{key:>{col1_width}}', val)
+        ptr.table_close()
+
 
 class Util:
 
@@ -903,15 +922,18 @@ The optional -c will include a table of chokepoints."""
 
     def do_status(self, line):
         """Display a summary of status parameters."""
-        print(f'Profile: {self.profile}')
-        print(f'Balance: {Money(self.balance)}')
-        print(f'Categories: {len(self.categories)}')
-        print(f'Exceptions: {len(self.exceptions)}')
-        print(f'Cache dir: {self.cache.cache_dir()}')
-        print(f'Download dir: {History.download_dir()}')
-        print(f'History date: {self.history["last-modified"]}')
-        print(f'History data: {os.path.basename(self.history["filename"])}')
-        print(f'History event count: {len(self.history["transactions"])}')
+        status = {
+            'Profile': self.profile,
+            'Balance': Money(self.balance),
+            'Categories': len(self.categories),
+            'Exceptions': len(self.exceptions),
+            'Cache Dir': self.cache.cache_dir(),
+            'Download Dir': History.download_dir(),
+            'History Date': self.history["last-modified"],
+            'History Data': os.path.basename(self.history["filename"]),
+            'History Event Count': len(self.history["transactions"]),
+        }
+        self.tables.dict_table('Status', status)
 
     def do_lasts(self, line):
         """Display a table of last occurrences for each transaction type.
