@@ -1,103 +1,87 @@
 import os
+import re
+import sys
+import glob
+import shutil
 import pickle
-from datetime import datetime
-from operator import itemgetter
 
 
 class Cache:
 
-    def __init__(self, name, **filenames):
+    def __init__(self, name, profile):
         self.name = name
-        self.filenames = filenames
+        self.profile = profile
 
     def cache_dir(self):
+        """Return the current cache directory."""
         return os.path.join(os.environ["HOME"], '.cache', self.name)
 
-    def cache_file(self, filename):
+    def cache_file(self, file_key, profile=None):
+        """Generate the full path to a cache file for the given profile/key.
+        """
+        if profile is None:
+            profile = self.profile
+        filename = re.sub(r'\W+', '_', file_key) + '.pkl'
         if not os.path.exists(self.cache_dir()):
             os.makedirs(self.cache_dir(), mode=0o700, exist_ok=True)
+        if file_key != 'profiles' \
+          and profile is not None and profile != 'Main':
+            filename = f'{profile}-{filename}'
         return os.path.join(self.cache_dir(), filename)
 
-    def read_exception(self, categories):
-        """Read the exceptions data from the Pickle datafile.
+    def delete(self, profile):
+        """Delete all cache files for the given profile."""
+        if not os.path.exists(self.cache_dir()):
+            print(f'No such directory: {self.cache_dir()}', file=sys.stderr)
+            return
+        if profile == 'Main':
+            print(f'Cannot delete the {profile} profile', file=sys.stderr)
+            return
+        for filepath in glob.glob(f'{self.cache_dir()}/{profile}-*.pkl'):
+            os.remove(filepath)
+
+    def copy(self, from_profile, to_profile):
+        """Copy all cache files from one profile to another."""
+        if not os.path.exists(self.cache_dir()):
+            print(f'No such directory: {self.cache_dir()}', file=sys.stderr)
+            return
+        if from_profile == to_profile:
+            print(f'Cannot copy {from_profile} onto itself', file=sys.stderr)
+            return
+        file_regex = re.compile(r'\A( \w+ )-( \w+ )[.]pkl', re.X | re.M | re.S)
+        if from_profile == 'Main':
+            file_regex = re.compile(r'\A ( \w+ ) [.]pkl', re.X | re.M | re.S)
+        for filepath in glob.glob(os.path.join(self.cache_dir(), '*.pkl')):
+            filename = os.path.basename(filepath)
+            m = file_regex.match(filename)
+            if m is None:
+                continue
+            tokens = m.groups()
+            to_filename = f'{to_profile}-{tokens[-1]}.pkl'
+            if to_profile == 'Main':
+                to_filename = f'{tokens[-1]}.pkl'
+            to_filepath = os.path.join(self.cache_dir(), to_filename)
+            shutil.copy(filepath, to_filepath)
+
+    def read(self, record_key, default=None):
+        """Read data from the cache file.
         """
-        if 'exceptions' not in self.filenames:
-            raise RuntimeError('No filename provided for "exceptions"')
-        exceptions = []
-        if os.path.exists(self.cache_file(self.filenames['exceptions'])):
-            with open(self.cache_file(self.filenames['exceptions']), 'rb') as pkl_file:
-                exceptions = pickle.load(pkl_file)
+        filename = self.cache_file(record_key)
+        if os.path.exists(filename):
+            with open(filename, 'rb') as pkl_file:
+                print(f'Reading: {os.path.basename(filename)}',
+                      file=sys.stderr)
+                data = pickle.load(pkl_file)
+                if data is None or len(data) == 0:
+                    data = default
+                return data
+        return default
 
-        if exceptions is None:
-            raise RuntimeError(f'Unable to read: {self.filenames["exceptions"]}')
-
-        def update_epoch(exc: dict):
-            """Add an 'epoch' Property.
-            """
-            date = datetime.strptime(exc['date'], '%m-%d-%Y')
-            exc['epoch'] = int(date.strftime('%s'))
-            return exc
-
-        threshold = 15
-        records = sorted([update_epoch(record) for record in exceptions],
-                         key=itemgetter('epoch'))
-
-        return [exc for exc in records
-                if exc['epoch'] >= threshold
-                and exc.get('category') in categories]
-
-    def update_exception(self, exceptions):
-        """Save the updated Exceptions list to the db.
+    def write(self, record_key, data):
+        """Write data to the dache file.
         """
-        if 'exceptions' not in self.filenames:
-            raise RuntimeError('No filename provided for "exceptions"')
-        if len(exceptions) > 0:
-            with open(self.cache_file(self.filenames['exceptions']), 'wb') as pkl_file:
-                pickle.dump(exceptions, pkl_file)
-            print(f'Updated: {self.filenames["exceptions"]}')
-
-    def read_transaction_type(self):
-        """Read the transactions data from the Pickle datafile.
-        """
-        if 'transactions' not in self.filenames:
-            raise RuntimeError('No filename provided for "transactions"')
-        transactions = []
-        if os.path.exists(self.cache_file(self.filenames['transactions'])):
-            with open(self.cache_file(self.filenames['transactions']), 'rb') as pkl_file:
-                transactions = pickle.load(pkl_file)
-        if transactions is None:
-            raise RuntimeError(f'Unable to read: {self.filenames["transactions"]}')
-        return transactions
-
-    def update_transaction_type(self, transactions):
-        """Save the updated transactions list to the db.
-        """
-        if 'transactions' not in self.filenames:
-            raise RuntimeError('No filename provided for "transactions"')
-        if len(transactions) > 0:
-            with open(self.cache_file(self.filenames['transactions']), 'wb') as pkl_file:
-                pickle.dump(transactions, pkl_file)
-            print(f'Updated: {self.filenames["transactions"]}')
-
-    def read_theme(self):
-        """Read the themes data from the Pickle datafile.
-        """
-        if 'themes' not in self.filenames:
-            raise RuntimeError('No filename provided for "themes"')
-        themes = {}
-        if os.path.exists(self.cache_file(self.filenames['themes'])):
-            with open(self.cache_file(self.filenames['themes']), 'rb') as pkl_file:
-                themes = pickle.load(pkl_file)
-        if themes is None:
-            raise RuntimeError(f'Unable to read: {self.filenames["themes"]}')
-        return themes
-
-    def update_theme(self, themes):
-        """Save the updated themes list to the db.
-        """
-        if 'themes' not in self.filenames:
-            raise RuntimeError('No filename provided for "themes"')
-        if len(themes) > 0:
-            with open(self.cache_file(self.filenames['themes']), 'wb') as pkl_file:
-                pickle.dump(themes, pkl_file)
-            print(f'Updated: {self.filenames["themes"]}')
+        filename = self.cache_file(record_key)
+        with open(filename, 'wb') as pkl_file:
+            print(f'Updating: {os.path.basename(filename)}',
+                  file=sys.stderr)
+            pickle.dump(data, pkl_file)
