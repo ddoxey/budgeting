@@ -8,6 +8,24 @@ import pickle
 
 class Cache:
 
+    @staticmethod
+    def session(name, session=None):
+        cache_dir = os.path.join(os.environ["HOME"], '.cache', name)
+        filename = os.path.join(cache_dir, 'session.pkl') 
+        if session is None:
+            if os.path.exists(filename):
+                with open(filename, 'rb') as pkl_file:
+                    print(f'Reading: {os.path.basename(filename)}',
+                          file=sys.stderr)
+                    session = pickle.load(pkl_file)
+            if session is None:
+                session = {}
+            return session
+        with open(filename, 'wb') as pkl_file:
+            print(f'Updating: {os.path.basename(filename)}',
+                  file=sys.stderr)
+            pickle.dump(session, pkl_file)
+
     def __init__(self, name, profile):
         self.name = name
         self.profile = profile
