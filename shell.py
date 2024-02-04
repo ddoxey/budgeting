@@ -227,7 +227,6 @@ class Tables:
 
         for category in categories:
             theme = self.get(category)
-            occurrence = occurrences.get(category)
             ptr.set_theme(**theme)
             ptr.table_row(
                 category,
@@ -282,13 +281,20 @@ class BudgetShell(cmd.Cmd):
 
     def __init__(self, completekey='tab', stdin=None, stdout=None):
         super().__init__(completekey, stdin, stdout)
+        self.balance = 0.0
+        self.cache = None
+        self.tables = None
+        self.profiles = None
+        self.transaction_types = None
+        self.categories = None
+        self.exceptions = None
+        self.history = None
         self.changes = {}
         self.profile = None
         self.do_reload(None)
 
     def do_reload(self, line):
         """Reload cached data and history from the transactions CSV."""
-        self.balance = 0.0
         if self.profile is None:
             self.profile = 'Main'
         self.cache = Cache(name='budget',
@@ -299,7 +305,7 @@ class BudgetShell(cmd.Cmd):
                                         [{'name': 'Main',
                                           'description': 'Default Profile'}])
         self.changes['profiles'] = False
-        self.transaction_types = self.cache.read('transactions', [])
+        self.transaction_types = self.cache.read('transaction_types', [])
         self.changes['transaction_types'] = False
         self.categories = sorted([trans.get('category')
                                   for trans in self.transaction_types])
@@ -488,7 +494,7 @@ class BudgetShell(cmd.Cmd):
             print(f'Unrecognized profile: {from_name}', file=sys.stderr)
             return
         if from_name == to_name:
-            print(f'Cannot copy {from_name} onto itself', file=sys.stderr)
+            print(f'Cannot copy {from_name} to itself', file=sys.stderr)
             return
         self.cache.copy(from_name, to_name)
         self.profiles.append(
@@ -496,6 +502,56 @@ class BudgetShell(cmd.Cmd):
              'description': f'Copy of {profiles[0]["description"]}'})
         self.changes['profiles'] = True
         self.do_save('profiles')
+
+    def copy_theme(self, arg_str):
+        copy_theme_regex = re.compile((
+            r'\A'
+            r'   (\w+) \s+ '
+            r'   (\w+) '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = copy_theme_regex.match(arg_str)
+        if m is None:
+            print(f'Unable parse theme copy: {arg_str}')
+            return
+        from_cat = m.group(1)
+        to_cat = m.group(2)
+        if from_cat not in self.tables.themes:
+            print(f'Unrecogized theme category: {from_cat}', file=sys.stderr)
+            return
+        if from_cat == to_cat:
+            print(f'Cannot copy {from_cat} theme to itself', file=sys.stderr)
+            return
+        self.tables.themes[to_cat] = dict(self.tables.themes[from_cat])
+        print(f'Copied theme {from_cat} to {to_cat}')
+        self.changes['themes'] = True
+
+    def copy_transaction(self, arg_str):
+        copy_transaction_type_regex = re.compile((
+            r'\A'
+            r'   (\w+) \s+ '
+            r'   (\w+) '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = copy_transaction_type_regex.match(arg_str)
+        if m is None:
+            print(f'Unable parse transaction copy: {arg_str}')
+            return
+        from_cat = m.group(1)
+        to_cat = m.group(2)
+        transactions = [dict(transaction)
+                        for transaction in self.transaction_types
+                        if transaction['category'] == from_cat]
+        if len(transactions) == 0:
+            print(f'Unrecogized transaction category: {from_cat}',
+                  file=sys.stderr)
+            return
+        if from_cat == to_cat:
+            print(f'Cannot copy {from_cat} transaction_type to itself',
+                  file=sys.stderr)
+            return
+        transactions[0]['category'] = to_cat
+        self.transaction_types.append(transactions[0])
+        print(f'Copied transaction {from_cat} to {to_cat}')
+        self.changes['transaction_types'] = True
 
     def do_copy(self, arg_str):
         """Create a copy of a profile."""
@@ -505,6 +561,12 @@ class BudgetShell(cmd.Cmd):
         copy_type, arg_str = re.split(r'\s+', arg_str.strip(), 1)
         if copy_type == 'profile':
             self.copy_profile(arg_str)
+            return
+        if copy_type == 'theme':
+            self.copy_theme(arg_str)
+            return
+        if copy_type == 'transaction':
+            self.copy_transaction(arg_str)
             return
         print(f'Unsupported copy type: {copy_type}', file=sys.stderr)
 
@@ -640,19 +702,23 @@ All changed data will be saved if the optional save type is omitted."""
             if save_type == 'profiles':
                 if self.changes.get('profiles', False):
                     self.cache.write('profiles', self.profiles)
+                    self.changes['profiles'] = False
                 continue
             if save_type == 'themes':
                 if self.changes.get('themes', False):
-                    self.cache.write('theme', self.tables.themes)
+                    self.cache.write('themes', self.tables.themes)
+                    self.changes['themes'] = False
                 continue
             if save_type == 'exceptions':
                 if self.changes.get('exceptions', False):
-                    self.cache.write('exception', self.exceptions)
+                    self.cache.write('exceptions', self.exceptions)
+                    self.changes['exceptions'] = False
                 continue
             if save_type == 'transactions':
                 if self.changes.get('transaction_types', False):
-                    self.cache.write('transaction_type',
+                    self.cache.write('transaction_types',
                                      self.transaction_types)
+                    self.changes['transaction_types'] = False
                 continue
             print(f'Unrecognized save type: {save_type}', file=sys.stderr)
 
@@ -666,6 +732,18 @@ All changed data will be saved if the optional save type is omitted."""
             if save_type not in save_types:
                 return [opt for opt in save_types
                         if opt.startswith(save_type)]
+        return None
+
+    def complete_copy(self, text, state, begidx, endidx):
+        copy_types = ['theme', 'transaction', 'profile']
+        tokens = re.split(r'\s+', state.strip())
+        if len(tokens) == 1:
+            return copy_types
+        if len(tokens) == 2:
+            copy_type = tokens[1]
+            if copy_type not in copy_types:
+                return [opt for opt in copy_types
+                        if opt.startswith(copy_type)]
         return None
 
     def delete_profile(self, arg_str):
