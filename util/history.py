@@ -1,6 +1,7 @@
 import re
 import os
 import csv
+import sys
 import glob
 from datetime import datetime
 
@@ -31,6 +32,7 @@ class History:
         last_modified = datetime.fromtimestamp(mtime).strftime('%m-%d-%Y %H:%M:%S')
         transactions = []
         with open(csv_file, encoding='UTF-8') as csv_fh:
+            print(f'Reading: {os.path.basename(csv_file)}', file=sys.stderr)
             csv_doc = csv.reader(csv_fh)
             header_row = next(csv_doc)
             headers = [re.sub(r'\W+', "", header.lower().replace(' ', "_"))
