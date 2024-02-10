@@ -770,8 +770,10 @@ The optional -c will include a table of chokepoints."""
 
     def do_status(self, line):
         """Display a summary of status parameters."""
+        profiles = [profile for profile in self.profiles
+                    if profile.get('name') == self.session.get('profile')]
         status = {
-            'Profile': self.session.get('profile'),
+            'Profile': profiles[0].get('description'),
             'Balance': Money(self.session.get('balance')),
             'Categories': len(self.categories),
             'Exceptions': len(self.exceptions),
