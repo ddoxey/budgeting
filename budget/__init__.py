@@ -337,7 +337,8 @@ class DateList:
                     continue
                 if repetition.repeater == 1 \
                   or occurrence_count % repetition.repeater == 0:
-                    self.dates.append(date['dt'])
+                    if date['dt'] != from_date:
+                        self.dates.append(date['dt'])
 
         self.from_date = from_date
         self.to_date = to_date
