@@ -239,17 +239,19 @@ class BudgetShell(cmd.Cmd):
         if Money.parse(amount) is None:
             print(f'Invalid monetary value: {amount}')
             return
-        desc_regex = "" if m.group(4) is None else m.group(4)
-        debit_regex = "" if m.group(5) is None else m.group(5)
         for transaction_type in self.transaction_types:
             if transaction_type['category'] == cat:
                 transaction_type['repetition'] = repetition
                 transaction_type['amount'] = float(Money(amount))
-                transaction_type['conditions']['description'] = desc_regex
-                transaction_type['conditions']['debit'] = debit_regex
+                if m.group(4) is not None:
+                    transaction_type['conditions']['description'] = m.group(4)
+                if m.group(5) is not None:
+                    transaction_type['conditions']['debit'] = m.group(5)
                 print(f'Updated transaction {cat}: {amount} on {repetition}')
                 self.changes['transaction_types'] = True
                 return
+        desc_regex = "" if m.group(4) is None else m.group(4)
+        debit_regex = "" if m.group(5) is None else m.group(5)
         self.transaction_types.append({'category': cat,
                                        'repetition': repetition,
                                        'amount': float(Money(amount)),
