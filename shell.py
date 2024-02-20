@@ -25,6 +25,25 @@ else:
 class Util:
 
     @staticmethod
+    def duration_to_days(duration):
+        duration_regex = re.compile((
+            r'\A'
+            r'   (\d+) \s* ([dmy])'
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = duration_regex.match(duration)
+        if m is None:
+            print(f'Unable parse duration: {duration}', file=sys.stderr)
+            return None
+        multiplier_for = {
+            'd': 1,
+            'm': 30,
+            'y': 365,
+        }
+        magnitude = int(m.group(1))
+        units = m.group(2).strip()
+        return magnitude * multiplier_for.get(units)
+
+    @staticmethod
     def current_exceptions(exceptions, categories):
 
         def update_epoch(exc: dict):
@@ -100,14 +119,14 @@ class BudgetShell(cmd.Cmd):
             r'\Z'), re.X | re.M | re.S | re.I)
         m = update_profile_regex.match(arg_str)
         if m is None:
-            print(f'Unable parse profile update: {arg_str}')
+            print(f'Unable parse profile update: {arg_str}', file=sys.stderr)
             return
         name = m.group(1)
         desc = m.group(2).strip()
         for profile_i, profile in enumerate(self.profiles):
             if profile.get('name') == name:
                 self.profiles[profile_i] = {'name': name, 'description': desc}
-                print(f'updated profile {name}: {desc}')
+                print(f'updated profile {name}: {desc}', file=sys.stderr)
                 self.changes['profiles'] = True
                 return
         self.profiles.append({'name': name, 'description': desc})
@@ -125,7 +144,7 @@ class BudgetShell(cmd.Cmd):
             r'\Z'), re.X | re.M | re.S | re.I)
         m = update_theme_regex.match(arg_str)
         if m is None:
-            print(f'Unable parse theme update: {arg_str}')
+            print(f'Unable parse theme update: {arg_str}', file=sys.stderr)
             return
         cat = m.group(1)
         if cat not in self.categories:
@@ -133,22 +152,22 @@ class BudgetShell(cmd.Cmd):
             return
         fg = m.group(2)
         if not fg.isdigit():
-            print(f'Foreground value {fg} is not an int')
+            print(f'Foreground value {fg} is not an int', file=sys.stderr)
             return
         if not 0 <= int(fg) <= 255:
-            print(f'Foreground value {fg} must on the range of 0 to 255')
+            print(f'Foreground value {fg} must on the range of 0 to 255', file=sys.stderr)
             return
         bg = m.group(3)
         if not bg.isdigit():
-            print(f'Background value {bg} is not an int')
+            print(f'Background value {bg} is not an int', file=sys.stderr)
             return
         if not 0 <= int(bg) <= 255:
-            print(f'Background value {bg} must on the range of 0 to 255')
+            print(f'Background value {bg} must on the range of 0 to 255', file=sys.stderr)
             return
         style = m.group(4)
         if style not in STYLES:
             print(f'Unrecognized style: {style}', file=sys.stderr)
-            print(f'Choose from: {", ".join(STYLES)}')
+            print(f'Choose from: {", ".join(STYLES)}', file=sys.stderr)
             return
         if cat in self.tables.themes:
             self.tables.themes[cat]['fg'] = int(fg)
@@ -173,7 +192,7 @@ class BudgetShell(cmd.Cmd):
             r'\Z'), re.X | re.M | re.S | re.I)
         m = update_exception_regex.match(arg_str)
         if m is None:
-            print(f'Unable parse exception update: {arg_str}')
+            print(f'Unable parse exception update: {arg_str}', file=sys.stderr)
             return
         cat = m.group(1)
         if cat not in self.categories:
@@ -750,22 +769,25 @@ Sets the account balance if a new value is provided."""
 Usage: run <days> [-c]
 
 The optional -c will include a table of chokepoints."""
-        days, chokepoints = None, None
+        duration, chokepoints = None, None
         if ' ' in argstr:
-            days, chokepoints = re.split(r'\s+', argstr.strip())
+            duration, chokepoints = re.split(r'\s+', argstr.strip())
         else:
-            days = argstr.strip()
-        if not days.isdigit() \
+            duration = argstr.strip()
+        days = Util.duration_to_days(duration)
+        if days is None \
            or chokepoints is not None and chokepoints != '-c':
-            print('usage: run <days> [-c]', file=sys.stderr)
+            print('Usage: run <int>(d|m|y) [-c]', file=sys.stderr)
         else:
+            if days > 60:
+                chokepoints = '-c'
             opening_balance = self.session.get('balance')
             budget = Budget(
                 self.session.get('balance'),
                 self.transaction_types,
                 self.exceptions,
                 self.history['transactions'],
-                int(days))
+                days)
             self.tables.projection_table(opening_balance, budget, chokepoints)
 
     def do_status(self, line):
