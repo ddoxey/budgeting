@@ -41,12 +41,13 @@ class Tables:
 
         if chokepoints:
             chokepoints = budget.get_chokepoints()
+            eye = chokepoints.eye()
 
             ptr = Printer(10, 30)
             ptr.table_header(
                 'date',
                 'balance',
-                title="Eye of the needle: " + str(chokepoints.eye()))
+                title=f'Eye of the needle: {eye}')
 
             theme = [
                 {'fg': 'black', 'bg': 230},
@@ -62,6 +63,11 @@ class Tables:
                     f'{chokepoint.get("balance"):0.2f}'
                 )
             ptr.table_close()
+
+            if eye > 0:
+                crash_date = chokepoints.crash_date()
+                ptr.set_theme(fg='white', bg='red')
+                ptr.banner(f'Predicted Crash Date: {crash_date}')
 
         days = budget.get_days()
         months_elapsed = int(days / 30)

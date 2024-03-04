@@ -2,6 +2,8 @@ import re
 import json
 from datetime import datetime
 from os import environ as env
+import numpy as np
+from sklearn.linear_model import LinearRegression
 from pytz import timezone
 from util.repetition import Repetition
 
@@ -167,6 +169,16 @@ class Chokepoint:
         self.datetime = event.get('datetime')
         self.balance = event.get('balance')
 
+    def __lt__(self, other):
+        if isinstance(other, __class__):
+            return self.balance < other.balance
+        return self.balance < other
+
+    def __gt__(self, other):
+        if isinstance(other, __class__):
+            return self.balance > other.balance
+        return self.balance > other
+
     def __repr__(self):
         return ' : '.join([
             self.datetime.strftime('%m-%d-%Y'),
@@ -184,13 +196,15 @@ class Chokepoint:
             return float(self.balance)
         if field == 'date':
             return self.datetime.strftime('%m-%d-%Y')
+        if field == 'timestamp':
+            return self.datetime.timestamp()
         raise ValueError(f'{field} is not a Chokepoint property')
 
 
 class ChokepointList:
 
     def __init__(self, transaction_types, events):
-
+        self.datapoints = {}
         self.iteration_n = 0
         self.smallest = None
 
@@ -230,12 +244,6 @@ class ChokepointList:
 
         for event_i, event in enumerate(events):
 
-            if smallest['balance'] > event.get('balance'):
-                smallest = {
-                    'balance': event.get('balance'),
-                    'event': event,
-                }
-
             category = event.get('category')
 
             if event.get('amount') == major_expense['amount']:
@@ -245,7 +253,21 @@ class ChokepointList:
             elif event.get('amount') == major_income['amount']:
 
                 if major_expense['count'] > 0 and event_i > 0:
-                    self.chokepoints.append(Chokepoint(events[event_i-1]))
+
+                    last_event = events[event_i-1]
+
+                    if smallest['balance'] > last_event.get('balance'):
+                        smallest = {
+                            'balance': last_event.get('balance'),
+                            'event': last_event,
+                        }
+
+                    chokepoint = Chokepoint(last_event)
+
+                    self.chokepoints.append(chokepoint)
+
+                    self.datapoints[chokepoint.get('timestamp')] \
+                        = chokepoint.get('balance')
 
                 major_expense['count'] = 0
 
@@ -268,6 +290,17 @@ class ChokepointList:
 
     def eye(self):
         return self.smallest
+
+    def crash_date(self):
+        x = np.array(list(self.datapoints.keys()))
+        y = np.array(list(self.datapoints.values()))
+        X = x.reshape(-1, 1)
+        Y = y.reshape(-1, 1)
+        model = LinearRegression().fit(X, Y)
+        slope = model.coef_[0][0]
+        intercept = model.intercept_[0]
+        x_intercept = -intercept / slope
+        return datetime.utcfromtimestamp(x_intercept).strftime("%m-%d-%Y")
 
 
 class DateList:
@@ -335,8 +368,8 @@ class DateList:
                 value = date['dt'].strftime(repetition.field)
                 if date['ts'] < now_ts:
                     continue
-                if repetition.repeater == 1 \
-                  or occurrence_count % repetition.repeater == 0:
+                if repetition.repeater == 1 or \
+                  occurrence_count % repetition.repeater == 0:
                     if date['dt'] != from_date:
                         self.dates.append(date['dt'])
 
