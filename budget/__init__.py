@@ -1,6 +1,7 @@
 import re
 import json
 from datetime import datetime
+from collections import defaultdict
 from os import environ as env
 import numpy as np
 from sklearn.linear_model import LinearRegression
@@ -499,6 +500,8 @@ class Budget:
 
     def __init__(self, balance, transaction_types, exceptions, history, days):
 
+        self.trans = transaction_types
+
         self.iteration_n = 0
 
         exception_for = {
@@ -510,7 +513,7 @@ class Budget:
 
         self.last_occurrence_of = find_lasts(
             history,
-            transaction_types,
+            self.trans,
             exceptions,
             now)
 
@@ -529,7 +532,7 @@ class Budget:
                 self.last_occurrence_of[trans_type['category']],
                 days
             )
-            for trans_type in transaction_types
+            for trans_type in self.trans
         ]
 
         events = []
@@ -545,7 +548,8 @@ class Budget:
         self.days = days
         self.events = [Event(e, bal) for e in events]
         self.balance = bal['balance']
-        self.chokepoints = ChokepointList(transaction_types, self.events)
+        self.chokepoints = None
+        self.totals = None
 
     def __iter__(self):
         self.iteration_n = -1
@@ -563,7 +567,16 @@ class Budget:
     def get_days(self):
         return self.days
 
+    def get_totals(self):
+        if self.totals is None:
+            self.totals = defaultdict(float)
+            for event in self.events:
+                self.totals[event.get('category')] += event.get('amount')
+        return self.totals
+
     def get_chokepoints(self):
+        if self.chokepoints is None:
+            self.chokepoints = ChokepointList(self.trans, self.events)
         return self.chokepoints
 
     def get_last_occurrences(self):

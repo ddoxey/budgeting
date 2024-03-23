@@ -731,14 +731,18 @@ Usage: balance [<amount>]
 Sets the account balance if a new value is provided."""
         line = line.strip().replace(',', "")
         if len(line) == 0:
-            print(f'Balance: {Money(self.session.get("balance"))}')
+            print(f'Balance: {Money(self.session.get("balance"), "$")}')
         else:
-            amount = float(Money(line))
-            if amount is None:
+            if not Money.matches(line):
                 print(f'Invalid amount: {line}', file=sys.stderr)
             else:
-                self.session['balance'] = amount
-                print(f'Balance: {Money(self.session.get("balance"))}')
+                amount = float(Money(line))
+                if amount is None:
+                    print(f'Invalid amount: {line}', file=sys.stderr)
+                else:
+                    self.session['balance'] = amount
+                    Cache.session('budget', self.session)
+                    print(f'Balance: {Money(self.session.get("balance"), "$")}')
 
     def do_cats(self, line):
         """Show a table of categories."""
@@ -768,21 +772,17 @@ Sets the account balance if a new value is provided."""
     def do_run(self, argstr):
         """Run the budget for the specified number of days.
 
-Usage: run <days> [-c]
+Usage: run <int><duration-type>
 
-The optional -c will include a table of chokepoints."""
-        duration, chokepoints = None, None
-        if ' ' in argstr:
-            duration, chokepoints = re.split(r'\s+', argstr.strip())
-        else:
-            duration = argstr.strip()
+Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
+        chokepoints = None
+        duration = argstr.strip()
         days = Util.duration_to_days(duration)
-        if days is None \
-           or chokepoints is not None and chokepoints != '-c':
-            print('Usage: run <int>(d|m|y) [-c]', file=sys.stderr)
+        if days is None:
+            print('Usage: run <int>(d|m|y)', file=sys.stderr)
         else:
             if days > 60:
-                chokepoints = '-c'
+                chokepoints = True
             opening_balance = self.session.get('balance')
             budget = Budget(
                 self.session.get('balance'),
@@ -792,13 +792,32 @@ The optional -c will include a table of chokepoints."""
                 days)
             self.tables.projection_table(opening_balance, budget, chokepoints)
 
+    def do_totals(self, argstr):
+        """Report the total amount for each category for the specified duration of time.
+
+Usage: totals <int><duration-type>
+
+Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
+        duration = argstr.strip()
+        days = Util.duration_to_days(duration)
+        if days is None:
+            print('Usage: totals <int>(d|m|y)', file=sys.stderr)
+        else:
+            budget = Budget(
+                self.session.get('balance'),
+                self.transaction_types,
+                self.exceptions,
+                self.history['transactions'],
+                days)
+            self.tables.totals_table(duration, budget.get_totals())
+
     def do_status(self, line):
         """Display a summary of status parameters."""
         profiles = [profile for profile in self.profiles
                     if profile.get('name') == self.session.get('profile')]
         status = {
             'Profile': profiles[0].get('description'),
-            'Balance': Money(self.session.get('balance')),
+            'Balance': Money(self.session.get('balance'), "$"),
             'Categories': len(self.categories),
             'Exceptions': len(self.exceptions),
             'Cache Dir': self.cache.cache_dir(),

@@ -2,13 +2,13 @@ import re
 import os
 import types
 from colors import color
+from util.money import Money
 
 
 class Printer:
 
     widths = []
     themes = []
-    money = re.compile(r'[-]?[0-9]+[.][0-9]{2}')
 
     def __init__(self, *column_widths):
         if len(column_widths) == 0:
@@ -126,7 +126,7 @@ class Printer:
         for col_i, col in enumerate(cols):
             theme_n = col_i if len(cols) == len(self.themes) else -1
             col = "" if col is None else str(col)
-            align = '>' if self.money.match(col) else '<'
+            align = '>' if Money.matches(col) else '<'
             layout = ' {{0:{}{}s}} '.format(align, self.widths[col_i])
             print(
                 color(

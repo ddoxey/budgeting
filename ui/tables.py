@@ -3,6 +3,7 @@
 import math
 from operator import itemgetter
 from ui import Printer
+from util.money import Money
 from util.repetition import Repetition
 
 
@@ -12,7 +13,7 @@ class Tables:
         self.profile = profile
         self.themes = themes
 
-    def get(self, key):
+    def get_theme(self, key):
         if key in self.themes:
             return self.themes[key]
         return {'fg': 105, 'bg': 121, 'style': 'bold'}
@@ -30,7 +31,7 @@ class Tables:
                 if this_mon != last_mon:
                     ptr.table_boundary(weight='lite')
                 last_mon = this_mon
-                theme = self.get(event.get('category'))
+                theme = self.get_theme(event.get('category'))
                 ptr.set_theme(**theme)
                 ptr.table_row(
                     event.get('date'),
@@ -78,7 +79,20 @@ class Tables:
         elif days > 0:
             print(f'{days} days\n')
 
-        return 0
+    def totals_table(self, duration, totals: dict):
+        """Print the table of totals.
+        """
+        ptr = Printer('*', 15)
+        ptr.table_header(title=f'{self.profile} Totals for {duration}')
+
+        categories = sorted(list(totals.keys()), key=lambda cat: totals.get(cat))
+
+        for category in categories:
+            amount = totals.get(category)
+            theme = self.get_theme(category)
+            ptr.set_theme(**theme)
+            ptr.table_row(category, str(Money(amount)))
+        ptr.table_close()
 
     def category_table(self, categories: list):
         """Print the table of categories.
@@ -105,7 +119,7 @@ class Tables:
                     row.append("")
                 else:
                     row.append(cat)
-                themes.append(self.get(cat))
+                themes.append(self.get_theme(cat))
             ptr.set_themes(themes)
             ptr.table_row(*row)
         ptr.table_close()
@@ -117,7 +131,7 @@ class Tables:
         ptr.table_header(title=f'{self.profile} Exceptions')
 
         for exception in exceptions:
-            theme = self.get(exception.get('category'))
+            theme = self.get_theme(exception.get('category'))
             ptr.set_theme(**theme)
             ptr.table_row(
                 exception.get('date'),
@@ -143,7 +157,7 @@ class Tables:
         records = sorted(transactions, key=itemgetter('amount'))
 
         for trans in records:
-            theme = self.get(trans.get('category'))
+            theme = self.get_theme(trans.get('category'))
             ptr.set_theme(**theme)
             if abbreviated:
                 ptr.table_row(
@@ -215,7 +229,7 @@ class Tables:
         categories = sorted(occurrences.keys())
 
         for category in categories:
-            theme = self.get(category)
+            theme = self.get_theme(category)
             ptr.set_theme(**theme)
             ptr.table_row(
                 category,
