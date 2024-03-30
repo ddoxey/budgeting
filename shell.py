@@ -200,6 +200,8 @@ class BudgetShell(cmd.Cmd):
             return
         date = m.group(2)
         amount = m.group(3)
+        if '.' not in amount:
+            amount = f'{amount}.00'
         for exception in self.exceptions:
             if exception['category'] == cat and exception['date'] == date:
                 print(f'Update exception {cat}: {amount} on {date}')
@@ -236,6 +238,8 @@ class BudgetShell(cmd.Cmd):
             print(f'Invalid repetition pattern: {repetition}')
             return
         amount = m.group(3)
+        if '.' not in amount:
+            amount = f'{amount}.00'
         if Money.parse(amount) is None:
             print(f'Invalid monetary value: {amount}')
             return
