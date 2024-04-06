@@ -15,7 +15,6 @@ from util.money import Money
 from util.history import History
 from util.repetition import Repetition
 
-
 if 'libedit' in readline.__doc__:
     readline.parse_and_bind('bind ^I rl_complete')  # MAC
 else:
@@ -79,6 +78,7 @@ class BudgetShell(cmd.Cmd):
         self.categories = None
         self.exceptions = None
         self.history = None
+        self.lasts = None
         self.changes = {}
         self.do_reload(None)
 
@@ -101,6 +101,21 @@ class BudgetShell(cmd.Cmd):
                             self.categories)
         self.changes['exceptions'] = False
         self.history = History.read_transaction_history()
+        self.lasts = self.cache.read('lasts')
+        if len(self.history['transactions']) == 0:
+            if self.lasts is not None:
+                self.history['transactions'] = [
+                    {'booking_date': date.replace('-', '/'), 'cat': cat}
+                    for cat, date in self.lasts.items()]
+        if len(self.history['transactions']) > 0:
+            budget = Budget(0,
+                            self.transaction_types,
+                            self.exceptions,
+                            self.history['transactions'],
+                            36)
+            self.lasts = budget.get_last_occurrences()
+            self.cache.write('lasts', self.lasts)
+        self.changes['lasts'] = False
 
     def get_predicted_dates(self, cat):
         budget = Budget(0,
@@ -181,6 +196,29 @@ class BudgetShell(cmd.Cmd):
                                    'style': style}
         print(f'Added theme {cat}: {fg}, {bg}, {style}')
         self.changes['themes'] = True
+        return
+
+    def update_last(self, arg_str):
+        update_exception_regex = re.compile((
+            r'\A'
+            r'   (\w+) \s+ '
+            r'   (\d{2}[-]\d{2}[-]\d{4}) '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = update_exception_regex.match(arg_str)
+        if m is None:
+            print(f'Unable parse last occurrence update: {arg_str}', file=sys.stderr)
+            return
+        cat = m.group(1)
+        if cat not in self.categories:
+            print(f'Unrecognized category: {cat}', file=sys.stderr)
+            return
+        date = m.group(2)
+        if cat in self.lasts:
+            print(f'Update last {cat}: {date}')
+        else:
+            print(f'Add last {cat}: {date}')
+        self.lasts[cat] = date
+        self.changes['lasts'] = True
         return
 
     def update_exception(self, arg_str):
@@ -289,7 +327,6 @@ class BudgetShell(cmd.Cmd):
         self.profiles.append(
             {'name': to_name,
              'description': f'Copy of {profiles[0]["description"]}'})
-        self.changes['profiles'] = True
         self.do_save('profiles')
 
     def copy_theme(self, arg_str):
@@ -362,7 +399,7 @@ class BudgetShell(cmd.Cmd):
     def do_update(self, arg_str):
         """Update the specified configuration.
 
-Usage: update <profile|theme|exception|transaction> <cat> <parameters ...>
+Usage: update <profile|theme|exception|transaction|last> <cat> <parameters ...>
 
 Profile updates:
     update profile <name> <description>
@@ -420,6 +457,15 @@ Transaction updates:
                  such as: r'[.]42$'
 
 Transactions are scheduled budget events, such as Rent, Payday, etc.
+
+Last occurrence updates:
+    update last <cat> <mm-dd-yyyy>
+
+<cat>        - transaction category
+<mm-dd-yyyy> - date of last occurrence
+
+The last occurrence records indicate the last date that a transaction
+category occurred.
 """
         if ' ' not in arg_str:
             print(f'Invalid update command: {arg_str}', file=sys.stderr)
@@ -437,11 +483,14 @@ Transactions are scheduled budget events, such as Rent, Payday, etc.
         if update_type == 'transaction':
             self.update_transaction(arg_str)
             return
+        if update_type == 'last':
+            self.update_last(arg_str)
+            return
         print(f'Invalid update type: {update_type}', file=sys.stderr)
         return
 
     def complete_update(self, text, state, begidx, endidx):
-        update_types = ['transaction', 'exception', 'theme', 'profile']
+        update_types = ['last', 'transaction', 'exception', 'theme', 'profile']
         tokens = re.split(r'\s+', state.strip())
         if len(tokens) == 1:
             return update_types
@@ -486,8 +535,17 @@ All changed data will be saved if the optional save type is omitted."""
                       for save_type in re.split(r'\s+', arg_str.strip())
                       if len(save_type) > 0]
         if len(save_types) == 0:
-            save_types = ['themes', 'transactions', 'exceptions', 'profiles']
+            save_types = ['lasts', 'themes', 'transactions', 'exceptions', 'profiles']
+        else:
+            for save_type in save_types:
+                if save_type in self.changes:
+                    self.changes[save_type] = True
         for save_type in save_types:
+            if save_type == 'lasts':
+                if self.changes.get('lasts', False):
+                    self.cache.write('lasts', self.lasts)
+                    self.changes['lasts'] = False
+                continue
             if save_type == 'profiles':
                 if self.changes.get('profiles', False):
                     self.cache.write('profiles', self.profiles)
@@ -551,7 +609,6 @@ All changed data will be saved if the optional save type is omitted."""
             if len(profiles) < len(self.profiles):
                 self.cache.delete(profile=name)
                 self.profiles = profiles
-                self.changes['profiles'] = True
                 self.do_save('profiles')
                 print(f'Removed profile: {name}')
                 if name == self.session.get('profile'):
@@ -822,9 +879,9 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
             'Exceptions': len(self.exceptions),
             'Cache Dir': self.cache.cache_dir(),
             'Download Dir': History.download_dir(),
-            'History Date': self.history["last-modified"],
-            'History Data': os.path.basename(self.history["filename"]),
-            'History Event Count': len(self.history["transactions"]),
+            'History Date': self.history['last-modified'],
+            'History Data': self.history['filename'],
+            'History Event Count': len(self.history['transactions']),
         }
         self.tables.dict_table('Status', status)
 
@@ -834,13 +891,18 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
 These dates are parsed from the downloaded transaction history or may be
 provided in an exception.
         """
-        budget = Budget(0,
-                        self.transaction_types,
-                        self.exceptions,
-                        self.history['transactions'],
-                        365)
-        occurrences = budget.get_last_occurrences()
-        self.tables.lasts_table(occurrences)
+        if self.lasts is None:
+            self.lasts = self.cache.read('lasts')
+        if self.lasts is None:
+            budget = Budget(0,
+                            self.transaction_types,
+                            self.exceptions,
+                            self.history['transactions'],
+                            36)
+            self.lasts = budget.get_last_occurrences()
+            self.cache.write('lasts', self.lasts)
+            self.changes['lasts'] = True
+        self.tables.lasts_table(self.lasts)
 
     def do_exit(self, line):
         """Save changes and exit."""

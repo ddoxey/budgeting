@@ -4,23 +4,25 @@ import csv
 import sys
 import glob
 from datetime import datetime
+from functools import lru_cache
 
 
 class History:
 
     @staticmethod
+    @lru_cache(maxsize=1)
     def download_dir():
         return os.path.join(os.environ["HOME"], 'Downloads')
 
     @staticmethod
     def find_transactions_csv():
         search_path = os.path.join(History.download_dir(), 'transactions*.*')
-        filenames = [{'path': filename, 'mtime': os.stat(filename).st_mtime}
-                     for filename in glob.glob(search_path)
-                     if filename.lower().endswith('.csv')]
-        if len(filenames) == 0:
-            raise RuntimeError(f'transactions.CSV not in {History.download_dir()}')
-        csv_files = sorted(filenames, key=lambda fn: fn['mtime'])
+        filepaths = [{'path': filepath, 'mtime': os.stat(filepath).st_mtime}
+                     for filepath in glob.glob(search_path)
+                     if filepath.lower().endswith('.csv')]
+        if len(filepaths) == 0:
+            return None
+        csv_files = sorted(filepaths, key=lambda fn: fn['mtime'])
         if 'DEBUG' in os.environ and os.environ['DEBUG']:
             print('chosen CSV:', csv_files[-1]['path'])
         return csv_files[-1]['path']
@@ -28,6 +30,11 @@ class History:
     @staticmethod
     def read_transaction_history():
         csv_file = History.find_transactions_csv()
+        if csv_file is None:
+            return {'transactions': [],
+                    'filename': None,
+                    'filepath': None,
+                    'last-modified': 0}
         mtime = os.stat(csv_file).st_mtime
         last_modified = datetime.fromtimestamp(mtime).strftime('%m-%d-%Y %H:%M:%S')
         transactions = []
@@ -43,5 +50,6 @@ class History:
                     event[headers[header_i]] = row[header_i]
                 transactions.append(event)
         return {'transactions': transactions,
-                'filename': csv_file,
+                'filename': os.path.basename(csv_file),
+                'filepath': csv_file,
                 'last-modified': last_modified}

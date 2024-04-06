@@ -114,6 +114,8 @@ def find_lasts(history, transaction_types, exceptions, now):
         return hit_count > 0 and condition_count == hit_count
 
     def categorize(transaction):
+        if 'cat' in transaction:
+            return transaction['cat']
         for trans_type in transaction_types:
             if matches(transaction, trans_type['conditions']):
                 return trans_type['category']
