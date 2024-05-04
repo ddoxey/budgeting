@@ -11,7 +11,10 @@ class Tables:
 
     def __init__(self, profile, themes):
         self.profile = profile
-        self.themes = themes
+        if themes is None:
+            self.themes = {}
+        else:
+            self.themes = themes
 
     def get_theme(self, key):
         if key in self.themes:

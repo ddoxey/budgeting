@@ -45,6 +45,9 @@ class Util:
     @staticmethod
     def current_exceptions(exceptions, categories):
 
+        if exceptions is None:
+            exceptions = []
+
         def update_epoch(exc: dict):
             """Add an 'epoch' Property.
             """
@@ -829,14 +832,14 @@ Sets the account balance if a new value is provided."""
     def do_run(self, argstr):
         """Run the budget for the specified number of days.
 
-Usage: run <int><duration-type>
+Usage: run <number><duration-type>
 
 Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
         chokepoints = None
         duration = argstr.strip()
         days = Util.duration_to_days(duration)
         if days is None:
-            print('Usage: run <int>(d|m|y)', file=sys.stderr)
+            print('Usage: run <number>(d|m|y)', file=sys.stderr)
         else:
             if days > 60:
                 chokepoints = True
@@ -852,13 +855,13 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
     def do_totals(self, argstr):
         """Report the total amount for each category for the specified duration of time.
 
-Usage: totals <int><duration-type>
+Usage: totals <number><duration-type>
 
 Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
         duration = argstr.strip()
         days = Util.duration_to_days(duration)
         if days is None:
-            print('Usage: totals <int>(d|m|y)', file=sys.stderr)
+            print('Usage: totals <number>(d|m|y)', file=sys.stderr)
         else:
             budget = Budget(
                 self.session.get('balance'),
