@@ -13,17 +13,21 @@
 # OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 import re
-
+import random
 from functools import partial
 
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 COLORS = ('black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan',
           'white')
-STYLES = ('bold', 'faint', 'italic', 'underline', 'blink', 'blink2',
-          'negative', 'concealed', 'crossed')
+STYLES = ('normal', 'bold', 'faint', 'italic', 'underline', 'blink',
+          'blink2', 'negative', 'concealed', 'crossed')
 
+
+def random_color_pair():
+    all_colors = list(range(0, 256))
+    return random.choice(all_colors), random.choice(all_colors)
 
 def color(s, fg=None, bg=None, style=None):
     sgr = []
@@ -47,7 +51,7 @@ def color(s, fg=None, bg=None, style=None):
     if style:
         for st in style.split('+'):
             if st in STYLES:
-                sgr.append(str(1 + STYLES.index(st)))
+                sgr.append(str(STYLES.index(st)))
             else:
                 raise Exception('Invalid style "%s"' % st)
 
@@ -60,7 +64,7 @@ def color(s, fg=None, bg=None, style=None):
 
 
 def strip_color(s):
-    return re.sub('\x1b\[.+?m', '', s)
+    return re.sub('\x1b[[].+?m', '', s)
 
 
 # Foreground shortcuts

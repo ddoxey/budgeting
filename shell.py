@@ -7,9 +7,9 @@ import cmd
 import readline  # MAC
 from datetime import datetime
 from operator import itemgetter
+import colors
 from ui.tables import Tables
 from budget import Budget
-from colors import STYLES
 from util.cache import Cache
 from util.money import Money
 from util.history import History
@@ -183,9 +183,9 @@ class BudgetShell(cmd.Cmd):
             print(f'Background value {bg} must on the range of 0 to 255', file=sys.stderr)
             return
         style = m.group(4)
-        if style not in STYLES:
+        if style not in colors.STYLES:
             print(f'Unrecognized style: {style}', file=sys.stderr)
-            print(f'Choose from: {", ".join(STYLES)}', file=sys.stderr)
+            print(f'Choose from: {", ".join(colors.STYLES)}', file=sys.stderr)
             return
         if cat in self.tables.themes:
             self.tables.themes[cat]['fg'] = int(fg)
@@ -492,6 +492,24 @@ category occurred.
         print(f'Invalid update type: {update_type}', file=sys.stderr)
         return
 
+    def complete_themes(self, text, state, begidx, endidx):
+        themes_types = ['randomize']
+        tokens = re.split(r'\s+', state.strip())
+        if len(tokens) == 1:
+            return themes_types
+        themes_type = tokens[1]
+        if len(tokens) == 2:
+            if themes_type not in themes_types:
+                return [opt for opt in themes_types
+                        if opt.startswith(themes_type)]
+            return self.categories
+        if len(tokens) == 3:
+            cat = tokens[2]
+            if cat not in self.categories:
+                return [opt for opt in self.categories
+                        if opt.startswith(cat)]
+        return None
+
     def complete_update(self, text, state, begidx, endidx):
         update_types = ['last', 'transaction', 'exception', 'theme', 'profile']
         tokens = re.split(r'\s+', state.strip())
@@ -519,12 +537,12 @@ category occurred.
                             if cat_date.startswith(date)]
         if len(tokens) == 5:
             if update_type == 'theme':
-                return STYLES
+                return colors.STYLES
         if len(tokens) == 6:
             if update_type == 'theme':
                 theme_style = tokens[5]
-                if theme_style not in STYLES:
-                    return [style for style in STYLES
+                if theme_style not in colors.STYLES:
+                    return [style for style in colors.STYLES
                             if style.startswith(theme_style)]
         return None
 
@@ -821,22 +839,57 @@ Sets the account balance if a new value is provided."""
         """Show a table of transaction types."""
         self.tables.transactions_table(self.transaction_types)
 
-    def do_themes(self, line):
+    def do_themes(self, arg_str):
         """Show a table of highlighting themes."""
+        if len(arg_str) > 0:
+            action, cat = None, None
+            theme_action_regex = re.compile((
+                r'\A'
+                r'   (randomize) '
+                r'   (?: \s+ (\w+) )? '
+                r'\Z'), re.X | re.M | re.S | re.I)
+            m = theme_action_regex.match(arg_str)
+            if m is not None:
+                action = m.group(1)
+                cat = m.group(2)
+                if cat is not None:
+                    if cat not in self.categories:
+                        print(f'Unrecognized category: {cat}', file=sys.stderr)
+                        return
+            else:
+                print(f'Unrecognized themes action: {arg_str}', file=sys.stderr)
+                return
+            if action == 'randomize':
+                if cat is not None:
+                    fg, bg = colors.random_color_pair()
+                    self.tables.themes[cat] = {'fg': int(fg),
+                                            'bg': int(bg),
+                                            'style': 'bold'}
+                else:
+                    self.tables.themes = {}
+                    for cat in self.categories:
+                        fg, bg = colors.random_color_pair()
+                        self.tables.themes[cat] = {'fg': int(fg),
+                                                'bg': int(bg),
+                                                'style': 'bold'}
+                self.changes['themes'] = True
+            else:
+                print(f'Invalid themes operation: {arg_str}', file=sys.stderr)
+                return
         self.tables.theme_table(self.tables.themes)
 
     def do_profiles(self, line):
         """Show a table of budget prfiles."""
         self.tables.profile_table(self.profiles)
 
-    def do_run(self, argstr):
+    def do_run(self, arg_str):
         """Run the budget for the specified number of days.
 
 Usage: run <number><duration-type>
 
 Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
         chokepoints = None
-        duration = argstr.strip()
+        duration = arg_str.strip()
         days = Util.duration_to_days(duration)
         if days is None:
             print('Usage: run <number>(d|m|y)', file=sys.stderr)
@@ -852,13 +905,13 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
                 days)
             self.tables.projection_table(opening_balance, budget, chokepoints)
 
-    def do_totals(self, argstr):
+    def do_totals(self, arg_str):
         """Report the total amount for each category for the specified duration of time.
 
 Usage: totals <number><duration-type>
 
 Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
-        duration = argstr.strip()
+        duration = arg_str.strip()
         days = Util.duration_to_days(duration)
         if days is None:
             print('Usage: totals <number>(d|m|y)', file=sys.stderr)
