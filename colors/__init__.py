@@ -27,7 +27,10 @@ STYLES = ('normal', 'bold', 'faint', 'italic', 'underline', 'blink',
 
 def random_color_pair():
     all_colors = list(range(0, 256))
-    return random.choice(all_colors), random.choice(all_colors)
+    color_a = random.choice(all_colors)
+    off_limits = list(range(color_a - 20, color_a + 21))
+    some_colors = [c for c in all_colors if c not in off_limits]
+    return color_a, random.choice(some_colors)
 
 def color(s, fg=None, bg=None, style=None):
     sgr = []
