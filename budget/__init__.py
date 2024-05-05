@@ -3,8 +3,8 @@ import json
 from datetime import datetime
 from collections import defaultdict
 from os import environ as env
-import numpy as np
-from sklearn.linear_model import LinearRegression
+from scipy.stats import linregress
+from collections import OrderedDict
 from pytz import timezone
 from util.repetition import Repetition
 
@@ -207,7 +207,7 @@ class Chokepoint:
 class ChokepointList:
 
     def __init__(self, transaction_types, events):
-        self.datapoints = {}
+        self.datapoints = OrderedDict()
         self.iteration_n = 0
         self.smallest = None
 
@@ -295,13 +295,11 @@ class ChokepointList:
         return self.smallest
 
     def crash_date(self):
-        x = np.array(list(self.datapoints.keys()))
-        y = np.array(list(self.datapoints.values()))
-        X = x.reshape(-1, 1)
-        Y = y.reshape(-1, 1)
-        model = LinearRegression().fit(X, Y)
-        slope = model.coef_[0][0]
-        intercept = model.intercept_[0]
+        x = list(self.datapoints.keys())
+        y = list(self.datapoints.values())
+        slope, intercept, _, _, _ = linregress(x, y)
+        if intercept < 0:
+            return None
         x_intercept = -intercept / slope
         return datetime.utcfromtimestamp(x_intercept).strftime("%m-%d-%Y")
 
