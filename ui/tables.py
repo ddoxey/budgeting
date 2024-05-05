@@ -47,31 +47,33 @@ class Tables:
             chokepoints = budget.get_chokepoints()
             eye = chokepoints.eye()
 
-            ptr = Printer(10, 30)
-            ptr.table_header(
-                'date',
-                'balance',
-                title=f'Eye of the needle: {eye}')
+            if eye is not None:
 
-            theme = [
-                {'fg': 'black', 'bg': 230},
-                {'fg': 'black', 'bg': 'white'},
-            ]
-            row_i = 0
+                ptr = Printer(10, 30)
+                ptr.table_header(
+                    'date',
+                    'balance',
+                    title=f'Eye of the needle: {eye}')
 
-            for chokepoint in chokepoints:
-                ptr.set_theme(**theme[row_i % 2])
-                row_i += 1
-                ptr.table_row(
-                    chokepoint.get('date'),
-                    f'{chokepoint.get("balance"):0.2f}'
-                )
-            ptr.table_close()
+                theme = [
+                    {'fg': 'black', 'bg': 230},
+                    {'fg': 'black', 'bg': 'white'},
+                ]
+                row_i = 0
 
-            if eye > 0:
-                crash_date = chokepoints.crash_date()
-                ptr.set_theme(fg='white', bg='red')
-                ptr.banner(f'Predicted Crash Date: {crash_date}')
+                for chokepoint in chokepoints:
+                    ptr.set_theme(**theme[row_i % 2])
+                    row_i += 1
+                    ptr.table_row(
+                        chokepoint.get('date'),
+                        f'{chokepoint.get("balance"):0.2f}'
+                    )
+                ptr.table_close()
+
+                if eye > 0:
+                    crash_date = chokepoints.crash_date()
+                    ptr.set_theme(fg='white', bg='red')
+                    ptr.banner(f'Predicted Crash Date: {crash_date}')
 
         days = budget.get_days()
         months_elapsed = int(days / 30)

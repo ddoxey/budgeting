@@ -840,7 +840,19 @@ Sets the account balance if a new value is provided."""
         self.tables.transactions_table(self.transaction_types)
 
     def do_themes(self, arg_str):
-        """Show a table of highlighting themes."""
+        """Show a table of highlighting themes.
+
+Usage: themes [randomize [category]]
+
+Show a table of the curent themes:
+    themes
+
+Randomize the theme for a specific category:
+    themes randomize Payday
+
+Randomize the theme for all categories:
+    themes randomize
+        """
         if len(arg_str) > 0:
             action, cat = None, None
             theme_action_regex = re.compile((
