@@ -7,6 +7,7 @@ import cmd
 import readline  # MAC
 from datetime import datetime
 from operator import itemgetter
+from collections import deque
 import colors
 from ui.tables import Tables
 from budget import Budget
@@ -493,7 +494,7 @@ category occurred.
         return
 
     def complete_themes(self, text, state, begidx, endidx):
-        themes_types = ['randomize']
+        themes_types = ['rotate', 'randomize']
         tokens = re.split(r'\s+', state.strip())
         if len(tokens) == 1:
             return themes_types
@@ -842,7 +843,7 @@ Sets the account balance if a new value is provided."""
     def do_themes(self, arg_str):
         """Show a table of highlighting themes.
 
-Usage: themes [randomize [category]]
+Usage: themes [randomize [category]|rotate]
 
 Show a table of the curent themes:
     themes
@@ -852,12 +853,15 @@ Randomize the theme for a specific category:
 
 Randomize the theme for all categories:
     themes randomize
+
+Rotate the theme relative to the categories:
+    themes rotate
         """
         if len(arg_str) > 0:
             action, cat = None, None
             theme_action_regex = re.compile((
                 r'\A'
-                r'   (randomize) '
+                r'   (rotate|randomize) '
                 r'   (?: \s+ (\w+) )? '
                 r'\Z'), re.X | re.M | re.S | re.I)
             m = theme_action_regex.match(arg_str)
@@ -875,16 +879,25 @@ Randomize the theme for all categories:
                 if cat is not None:
                     fg, bg = colors.random_color_pair()
                     self.tables.themes[cat] = {'fg': int(fg),
-                                            'bg': int(bg),
-                                            'style': 'bold'}
+                                               'bg': int(bg),
+                                               'style': 'bold'}
                 else:
                     self.tables.themes = {}
-                    for cat in self.categories:
-                        fg, bg = colors.random_color_pair()
-                        self.tables.themes[cat] = {'fg': int(fg),
-                                                'bg': int(bg),
-                                                'style': 'bold'}
+                    palette = colors.random_palette(len(self.categories))
+                    for index, cat in enumerate(self.categories):
+                        index %= len(palette)
+                        self.tables.themes[cat] = {'fg': int(palette[index]['fg']),
+                                                   'bg': int(palette[index]['bg']),
+                                                   'style': 'bold'}
                 self.changes['themes'] = True
+            elif action == 'rotate':
+                cats = self.tables.themes.keys()
+                themes = [self.tables.themes[cat] for cat in cats]
+                catd = deque(cats)
+                catd.rotate(1)
+                cats = list(catd)
+                for index, cat in enumerate(cats):
+                   self.tables.themes[cat] = themes[index] 
             else:
                 print(f'Invalid themes operation: {arg_str}', file=sys.stderr)
                 return

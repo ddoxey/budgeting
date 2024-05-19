@@ -15,6 +15,7 @@
 import re
 import random
 from functools import partial
+from colors.palettes import Palettes
 
 
 __version__ = '1.0.3'
@@ -24,6 +25,13 @@ COLORS = ('black', 'red', 'green', 'yellow', 'blue', 'magenta', 'cyan',
 STYLES = ('normal', 'bold', 'faint', 'italic', 'underline', 'blink',
           'blink2', 'negative', 'concealed', 'crossed')
 
+
+def random_palette(size):
+    palette = random.choice(Palettes)
+    random.shuffle(palette)
+    if len(palette) > size:
+        palette = palette[0:size]
+    return palette
 
 def random_color_pair():
     all_colors = list(range(0, 256))
