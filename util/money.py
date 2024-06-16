@@ -18,6 +18,8 @@ class Money:
         if isinstance(text, float):
             return text
         text = text.strip().replace(',', "")
+        if '.' not in text:
+            text += '.00'
         m = Money.REGEX.match(text)
         if m is None:
             return None
