@@ -109,7 +109,7 @@ class BudgetShell(cmd.Cmd):
         if len(self.history['transactions']) == 0:
             if self.lasts is not None:
                 self.history['transactions'] = [
-                    {'booking_date': date.replace('-', '/'), 'cat': cat}
+                    {'transaction_date': date.replace('-', '/'), 'cat': cat}
                     for cat, date in self.lasts.items()]
         if len(self.history['transactions']) > 0:
             budget = Budget(0,
@@ -474,7 +474,7 @@ category occurred.
         if ' ' not in arg_str:
             print(f'Invalid update command: {arg_str}', file=sys.stderr)
             return
-        update_type, arg_str = re.split(r'\s+', arg_str.strip(), 1)
+        update_type, arg_str = re.split(r'\s+', arg_str.strip(), maxsplit=1)
         if update_type == 'profile':
             self.update_profile(arg_str)
             return
