@@ -388,7 +388,7 @@ class BudgetShell(cmd.Cmd):
         if ' ' not in arg_str:
             print(f'Invalid copy command: {arg_str}', file=sys.stderr)
             return
-        copy_type, arg_str = re.split(r'\s+', arg_str.strip(), 1)
+        copy_type, arg_str = re.split(r'\s+', arg_str.strip(), maxsplit=1)
         if copy_type == 'profile':
             self.copy_profile(arg_str)
             return
@@ -743,7 +743,7 @@ Delete a transaction type:
         if ' ' not in arg_str:
             print(f'Invalid del command: {arg_str}', file=sys.stderr)
             return
-        del_type, arg_str = re.split(r'\s+', arg_str.strip(), 1)
+        del_type, arg_str = re.split(r'\s+', arg_str.strip(), maxsplit=1)
         if del_type == 'profile':
             self.delete_profile(arg_str)
             return
