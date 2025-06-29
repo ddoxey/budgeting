@@ -274,6 +274,12 @@ class ChokepointList:
 
                 major_expense['count'] = 0
 
+        if smallest['balance'] > events[0].get('balance'):
+            smallest = {
+                'balance': events[0].get('balance'),
+                'event': events[0],
+            }
+
         if smallest['event'] is not None:
             self.smallest = Chokepoint(smallest['event'])
 
@@ -482,8 +488,8 @@ class Event:
         return ' '.join([
             self.event['datetime'].strftime('%m-%d-%Y'),
             self.event['category'],
-            self.event['amount'],
-            self.event['balance']])
+            str(self.event['amount']),
+            str(self.event['balance'])])
 
     def get(self, field):
         if field in ['amount', 'balance']:
