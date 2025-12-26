@@ -161,13 +161,18 @@ class Tables:
 
         records = sorted(transactions, key=itemgetter('amount'))
 
+        montly_balance = 0
+
         for trans in records:
             theme = self.get_theme(trans.get('category'))
             ptr.set_theme(**theme)
+            repeats = Repetition(trans.get('repetition'))
+            factor = repeats.monthly_factor()
+            montly_balance += (factor * trans.get('amount'))
             if abbreviated:
                 ptr.table_row(
                     trans.get('category'),
-                    str(Repetition(trans.get('repetition'))),
+                    str(repeats),
                     f'{trans.get("amount"):0.2f}')
             else:
                 ptr.table_row(
@@ -177,6 +182,10 @@ class Tables:
                     trans.get('conditions').get('description'),
                     trans.get('conditions').get('debit'))
         ptr.table_close()
+
+        ptr.set_theme(fg='white', bg='blue')
+        ptr.banner(f'{self.profile} Monthly Balance: {montly_balance:0.2f}')
+
 
     def theme_table(self, themes):
         """Display the theme table.
