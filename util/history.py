@@ -21,6 +21,8 @@ class History:
                      for filepath in glob.glob(search_path)
                      if filepath.lower().endswith('.csv')]
         if len(filepaths) == 0:
+            if 'DEBUG' in os.environ and os.environ['DEBUG']:
+                print('No CSVs found in:', search_path)
             return None
         csv_files = sorted(filepaths, key=lambda fn: fn['mtime'])
         if 'DEBUG' in os.environ and os.environ['DEBUG']:
