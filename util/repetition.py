@@ -38,6 +38,19 @@ class Repetition:
             return '%d'
         return '%a'
 
+    def monthly_factor(self):
+        values = self.values
+        if len(values) == 1:
+            if values[0][0].isdigit():
+                # day of month
+                return 1 / self.repeater
+            else:
+                # day of week
+                return 4 / self.repeater
+        else:
+            # multiple days per month (repeater n/a)
+            return len(values)
+
     def __str__(self):
         when = self.when
         repeats = 'every'
