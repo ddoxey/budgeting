@@ -143,7 +143,7 @@ class Printer:
         self._table_bar('ul', 'hl', 'hl', 'ur')
         width = -1 + sum((w + 3 for w in self.widths))
         print(self._c('vl'), end="")
-        print(color(title.center(width), bg=148, style='bold'), end="")
+        print(color(title.center(width), fg=1, bg=148, style='bold'), end="")
         print(self._c('vl'))
 
     def _table_head_row(self, l, r, *cols):
