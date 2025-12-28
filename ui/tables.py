@@ -149,12 +149,12 @@ class Tables:
     def transactions_table(self, transactions, abbreviated=False):
         """Display the transaction types table.
         """
-        col_sizes = ['12', 15,  10, '15', 12]
+        col_sizes = [12, 15,  10, '*', 12]
         col_headers = [Cell('Category').text(), Cell('Repeats').text(),
                        Cell('Amount').text(), Cell('Match Description').text(),
                        Cell('Match Amount').text()]
         if abbreviated:
-            col_sizes = ['12', 15,  12]
+            col_sizes = ['*', 15,  12]
             col_headers = [Cell('Category').text(), Cell('Repeats').text(),
                            Cell('Amount').text()]
 
