@@ -954,15 +954,15 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
         profiles = [profile for profile in self.profiles
                     if profile.get('name') == self.session.get('profile')]
         status = {
-            'Profile': profiles[0].get('description'),
-            'Balance': Money(self.session.get('balance'), "$"),
-            'Categories': len(self.categories),
-            'Exceptions': len(self.exceptions),
-            'Cache Dir': self.cache.cache_dir(),
-            'Download Dir': History.download_dir(),
-            'History Date': self.history['last-modified'],
-            'History Data': self.history['filename'],
-            'History Event Count': len(self.history['transactions']),
+            Cell('Profile').text(): Cell(profiles[0].get('description')).text(),
+            Cell('Balance').text(): Money(self.session.get('balance'), "$"),
+            Cell('Categories').text(): len(self.categories),
+            Cell('Exceptions').text(): len(self.exceptions),
+            Cell('Cache Dir').text(): self.cache.cache_dir(),
+            Cell('Download Dir').text(): History.download_dir(),
+            Cell('History Date').text(): self.history['last-modified'],
+            Cell('History Data').text(): self.history['filename'],
+            Cell('History Event Count').text(): len(self.history['transactions']),
         }
         self.tables.dict_table('Status', status)
 

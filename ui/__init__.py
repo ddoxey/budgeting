@@ -3,6 +3,7 @@ import os
 import types
 from colors import color
 from util.money import Money
+from util.text import Cell
 
 
 class Printer:
@@ -126,11 +127,10 @@ class Printer:
         for col_i, col in enumerate(cols):
             theme_n = col_i if len(cols) == len(self.themes) else -1
             col = "" if col is None else str(col)
-            align = '>' if Money.matches(col) else '<'
-            layout = ' {{0:{}{}s}} '.format(align, self.widths[col_i])
+            alignment = 'right' if Money.matches(col) else 'left'
             print(
                 color(
-                    layout.format(col),
+                    str(Cell(col, width=self.widths[col_i] + 2, align=alignment)),
                     fg=self.themes[theme_n]['fg'],
                     bg=self.themes[theme_n]['bg'],
                     style=self.themes[theme_n]['style']),
@@ -143,7 +143,7 @@ class Printer:
         self._table_bar('ul', 'hl', 'hl', 'ur')
         width = -1 + sum((w + 3 for w in self.widths))
         print(self._c('vl'), end="")
-        print(color(title.center(width), fg=1, bg=148, style='bold'), end="")
+        print(color(Cell(title).center(width), fg=1, bg=148, style='bold'), end="")
         print(self._c('vl'))
 
     def _table_head_row(self, l, r, *cols):
@@ -152,7 +152,7 @@ class Printer:
             theme_n = col_i if len(cols) == len(self.themes) else -1
             print(
                 color(
-                    col.upper().center(self.widths[col_i] + 2),
+                    str(Cell(col, width=self.widths[col_i] + 2, align='center')),
                     fg=self.themes[theme_n]['fg'],
                     bg=self.themes[theme_n]['bg'],
                     style='bold'
@@ -200,7 +200,6 @@ class Printer:
     def banner(self, title):
         self._box_horizontal('ul', 'hl', 'ur')
         print(self._c('vl'), end="")
-        layout = ' {{0:{}s}} '.format(int(self.columns) - 4)
-        print(color(layout.format(title), style='bold'), end="")
+        print(color(Cell(title).left(int(self.columns) - 2), style='bold'), end="")
         print(self._c('vl'))
         self._box_horizontal('ll', 'hl', 'lr')

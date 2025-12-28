@@ -1,6 +1,6 @@
 import re
 import inflect
-
+from util.text import Cell
 
 class Repetition:
 
@@ -56,9 +56,9 @@ class Repetition:
         repeats = 'every'
         inflector = inflect.engine()
         if self.repeater > 1:
-            repeats = f'every {inflector.ordinal(self.repeater)}'
+            repeats = f'{Cell("every")} {inflector.ordinal(self.repeater)}'
         if when.isdigit():
             when = inflector.ordinal(int(when))
             if repeats == 'every':
-                return f'{when} monthly'
-        return f'{repeats} {when}'
+                return f'{when} {Cell("monthly")}'
+        return f'{repeats} {Cell(when)}'

@@ -4,6 +4,7 @@ import math
 from operator import itemgetter
 from ui import Printer
 from util.money import Money
+from util.text import Cell
 from util.repetition import Repetition
 
 
@@ -23,8 +24,9 @@ class Tables:
 
     def projection_table(self, opening_balance, budget, chokepoints=False):
         ptr = Printer(10, '*', 10, 10)
-        ptr.banner(f'Opening Balance: {opening_balance}')
-        ptr.table_header('date', 'category', 'amount', 'balance')
+        ptr.banner(f'{Cell("Opening Balance")}: {opening_balance}')
+        ptr.table_header(Cell('date').text(), Cell('category').text(),
+                         Cell('amount').text(), Cell('balance').text())
         last_mon = None
         for event in budget:
             if event.get('amount') != 0:
@@ -38,7 +40,7 @@ class Tables:
                 ptr.set_theme(**theme)
                 ptr.table_row(
                     event.get('date'),
-                    event.get('category'),
+                    Cell(event.get('category')).text(),
                     f'{event.get("amount"):0.2f}',
                     f'{event.get("balance"):0.2f}')
         ptr.table_close()
@@ -53,7 +55,7 @@ class Tables:
                 ptr.table_header(
                     'date',
                     'balance',
-                    title=f'Eye of the needle: {eye}')
+                    title=f'{Cell("Eye of the needle")}: {eye}')
 
                 theme = [
                     {'fg': 'black', 'bg': 230},
@@ -73,22 +75,22 @@ class Tables:
                 if eye > 0:
                     crash_date = chokepoints.crash_date()
                     ptr.set_theme(fg='white', bg='red')
-                    ptr.banner(f'Predicted Crash Date: {crash_date}')
+                    ptr.banner(f'{Cell("Predicted Crash Date")}: {crash_date}')
 
         days = budget.get_days()
         months_elapsed = int(days / 30)
         days = days - int(months_elapsed * 30)
 
         if months_elapsed > 0:
-            print(f'{months_elapsed} months, {days} days elapsed\n')
+            print(f'{months_elapsed} {Cell("months")}, {days} {Cell("days elapsed")}\n')
         elif days > 0:
-            print(f'{days} days\n')
+            print(f'{days} {Cell("days")}\n')
 
     def totals_table(self, duration, totals: dict):
         """Print the table of totals.
         """
         ptr = Printer('*', 15)
-        ptr.table_header(title=f'{self.profile} Totals for {duration}')
+        ptr.table_header(title=f'{Cell(self.profile)} {Cell("Totals for")} {duration}')
 
         categories = sorted(list(totals.keys()), key=lambda cat: totals.get(cat))
 
@@ -107,7 +109,7 @@ class Tables:
 
         ptr = Printer(15 for col_i in range(columns_n))
 
-        ptr.table_header(title=f'{self.profile} Categories')
+        ptr.table_header(title=f'{Cell(self.profile)} {Cell("Categories")}')
 
         def get(r_n, c_n):
             idx = r_n + (c_n * rows_n)
@@ -133,7 +135,7 @@ class Tables:
         """Display the exceptions table.
         """
         ptr = Printer(10, '*', 10)
-        ptr.table_header(title=f'{self.profile} Exceptions')
+        ptr.table_header(title=f'{Cell(self.profile)} {Cell("Exceptions")}')
 
         for exception in exceptions:
             theme = self.get_theme(exception.get('category'))
@@ -147,15 +149,17 @@ class Tables:
     def transactions_table(self, transactions, abbreviated=False):
         """Display the transaction types table.
         """
-        col_sizes = ['10', 14,  10, '*', 12]
-        col_headers = ['Category', 'Repeats', 'Amount',
-                       'Match Description', 'Match Amount']
+        col_sizes = ['12', 15,  10, '15', 12]
+        col_headers = [Cell('Category').text(), Cell('Repeats').text(),
+                       Cell('Amount').text(), Cell('Match Description').text(),
+                       Cell('Match Amount').text()]
         if abbreviated:
-            col_sizes = ['10', 14,  10]
-            col_headers = ['Category', 'Repeats', 'Amount']
+            col_sizes = ['12', 15,  12]
+            col_headers = [Cell('Category').text(), Cell('Repeats').text(),
+                           Cell('Amount').text()]
 
         ptr = Printer(*col_sizes)
-        ptr.table_header(title=f'{self.profile} Transaction Types')
+        ptr.table_header(title=f'{Cell(self.profile)} {Cell("Transaction Types")}')
         ptr.table_row(*col_headers)
         ptr.table_boundary(weight='lite')
 
@@ -171,29 +175,30 @@ class Tables:
             montly_balance += (factor * trans.get('amount'))
             if abbreviated:
                 ptr.table_row(
-                    trans.get('category'),
+                    Cell(trans.get('category')).text(),
                     str(repeats),
                     f'{trans.get("amount"):0.2f}')
             else:
                 ptr.table_row(
-                    trans.get('category'),
-                    str(Repetition(trans.get('repetition'))),
+                    Cell(trans.get('category')).text(),
+                    str(repeats),
                     f'{trans.get("amount"):0.2f}',
                     trans.get('conditions').get('description'),
                     trans.get('conditions').get('debit'))
         ptr.table_close()
 
         ptr.set_theme(fg='white', bg='blue')
-        ptr.banner(f'{self.profile} Monthly Balance: {montly_balance:0.2f}')
+        ptr.banner(f'{Cell(self.profile)} {Cell("Monthly Balance")}: {montly_balance:0.2f}')
 
 
     def theme_table(self, themes):
         """Display the theme table.
         """
         ptr = Printer('*', 10,  10, 10)
-        ptr.table_header(title=f'{self.profile} Themes')
+        ptr.table_header(title=f'{Cell(self.profile)} {Cell("Themes")}')
 
-        ptr.table_row('Category', 'FG', 'BG', 'Style')
+        ptr.table_row(Cell('Category').text(), Cell('FG').text(),
+                      Cell('BG').text(), Cell('Style').text())
         ptr.table_boundary(weight='lite')
 
         categories = sorted(themes.keys())
@@ -202,7 +207,7 @@ class Tables:
             theme = themes.get(category)
             ptr.set_theme(**theme)
             ptr.table_row(
-                category,
+                Cell(category).text(),
                 str(theme.get('fg')),
                 str(theme.get('bg')),
                 theme.get('style'))
@@ -212,9 +217,9 @@ class Tables:
         """Display the profile table.
         """
         ptr = Printer(10, '*')
-        ptr.table_header(title=f'{self.profile} Profiles')
+        ptr.table_header(title=f'{Cell(self.profile)} {Cell("Profiles")}')
 
-        ptr.table_row('Name', 'Description')
+        ptr.table_row(Cell('Name').text(), Cell('Description').text())
         ptr.table_boundary(weight='lite')
 
         theme = [
@@ -227,17 +232,17 @@ class Tables:
             ptr.set_theme(**theme[row_i % 2])
             row_i += 1
             ptr.table_row(
-                profile.get('name'),
-                profile.get('description'))
+                Cell(profile.get('name')).text(),
+                Cell(profile.get('description')).text())
         ptr.table_close()
 
     def lasts_table(self, occurrences):
         """Display the last occurrences table.
         """
         ptr = Printer('*', 10)
-        ptr.table_header(title=f'{self.profile} Last Occurrences')
+        ptr.table_header(title=f'{Cell(self.profile)} {Cell("Last Occurrences")}')
 
-        ptr.table_row('Category', 'Date')
+        ptr.table_row(Cell('Category').text(), Cell('Date').text())
         ptr.table_boundary(weight='lite')
 
         categories = sorted(occurrences.keys())
@@ -246,7 +251,7 @@ class Tables:
             theme = self.get_theme(category)
             ptr.set_theme(**theme)
             ptr.table_row(
-                category,
+                Cell(category).text(),
                 occurrences.get(category))
         ptr.table_close()
 
@@ -255,7 +260,7 @@ class Tables:
         """
         col1_width = max(len(key) for key in data)
         ptr = Printer(col1_width, '*')
-        ptr.table_header(title=f'{self.profile} {title}')
+        ptr.table_header(title=f'{Cell(self.profile)} {Cell(title)}')
 
         theme = [
             {'fg': 'black', 'bg': 230},
