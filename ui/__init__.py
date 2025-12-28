@@ -8,50 +8,46 @@ from util.text import Cell
 
 class Printer:
 
-    widths = []
-    themes = []
-
-    def __init__(self, *column_widths):
-        if len(column_widths) == 0:
+    def __init__(self, *cell_widths):
+        if len(cell_widths) == 0:
             raise RuntimeError(f'{__class__.__name__} Requires column widths')
-        self.rows, self.columns = None, None
+        self.row_count, self.col_count = None, None
         with os.popen('stty size', 'r') as stty:
             for line in stty:
-                self.rows, self.columns = [int(n) for n in line.split()]
+                self.row_count, self.col_count = [int(n) for n in line.split()]
                 break
-        if isinstance(column_widths[0], types.GeneratorType):
-            self.set_column_widths(list(*column_widths))
+        if isinstance(cell_widths[0], types.GeneratorType):
+            self.cell_widths = self.adjust_widths(list(*cell_widths))
         else:
-            self.set_column_widths(list(column_widths))
+            self.cell_widths = self.adjust_widths(list(cell_widths))
         self.set_theme()
 
-    def set_column_widths(self, column_widths):
-        column_pad = 2
-        column_sep = 1
+    def adjust_widths(self, cell_widths):
+        cell_pad = 2
+        cell_sep = 1
 
-        wildcard_at = set()
-        for idx, width in enumerate(column_widths):
-            if not isinstance(width, int):
-                wildcard_at.add(idx)
+        cell_count = len(cell_widths)
+        fixed_sum = sum(w for w in cell_widths if isinstance(w, int))
+        wild_idxs = [i for i, w in enumerate(cell_widths) if not isinstance(w, int)]
+        wild_count = len(wild_idxs)
 
-        def column_sum(widths):
-            return column_sep + sum((
-                column_pad + width + column_sep
-                for width in widths
-                if isinstance(width, int)))
+        if wild_count == 0:
+            return list(cell_widths)
 
-        if len(wildcard_at) > 0:
-            width_sum = column_sum(column_widths)
-            surplus = self.columns - width_sum
-            wildcard = int(
-                (surplus / len(wildcard_at))
-                - (column_pad + column_sep))
-            wildcard = 1 if wildcard <= 0 else wildcard
+        overhead = cell_sep + cell_count * (cell_pad + cell_sep)
+        slack = self.col_count - (overhead + fixed_sum)
 
-            for idx in wildcard_at:
-                column_widths[idx] = wildcard
+        if slack < 0:
+            # table can't fit
+            wild = 1
+            remainder = 0
+        else:
+            wild, remainder = divmod(slack, wild_count)
 
-        self.widths = column_widths
+        widths = list(cell_widths)
+        for j, idx in enumerate(wild_idxs):
+            widths[idx] = wild + (1 if j < remainder else 0)
+        return widths
 
     def set_themes(self, themes):
         self.themes = []
@@ -63,7 +59,6 @@ class Printer:
             })
 
     def set_theme(self, fg='black', bg='white', style=""):
-
         self.themes = [{
             'fg': fg,
             'bg': bg,
@@ -111,14 +106,14 @@ class Printer:
 
     def _box_horizontal(self, l, h, r):
         print(self._c(l), end="")
-        print(self._c(h).ljust(int(self.columns) - 2, self._c(h)), end="")
+        print(self._c(h).ljust(int(self.col_count) - 2, self._c(h)), end="")
         print(self._c(r))
 
     def _table_bar(self, l, h, t, r):
         print(self._c(l), end="")
-        for width_i, width in enumerate(self.widths):
+        for width_i, width in enumerate(self.cell_widths):
             print(self._c(h).ljust(width + 2, self._c(h)), end="")
-            if width_i < len(self.widths) - 1:
+            if width_i < len(self.cell_widths) - 1:
                 print(self._c(t), end="")
         print(self._c(r))
 
@@ -130,7 +125,7 @@ class Printer:
             alignment = 'right' if Money.matches(col) else 'left'
             print(
                 color(
-                    str(Cell(col, width=self.widths[col_i] + 2, align=alignment)),
+                    str(Cell(col, width=self.cell_widths[col_i] + 2, align=alignment)),
                     fg=self.themes[theme_n]['fg'],
                     bg=self.themes[theme_n]['bg'],
                     style=self.themes[theme_n]['style']),
@@ -141,7 +136,7 @@ class Printer:
 
     def _table_title_row(self, title):
         self._table_bar('ul', 'hl', 'hl', 'ur')
-        width = -1 + sum((w + 3 for w in self.widths))
+        width = -1 + sum((w + 3 for w in self.cell_widths))
         print(self._c('vl'), end="")
         print(color(Cell(title).center(width), fg=1, bg=148, style='bold'), end="")
         print(self._c('vl'))
@@ -152,7 +147,7 @@ class Printer:
             theme_n = col_i if len(cols) == len(self.themes) else -1
             print(
                 color(
-                    str(Cell(col, width=self.widths[col_i] + 2, align='center')),
+                    str(Cell(col, width=self.cell_widths[col_i] + 2, align='center')),
                     fg=self.themes[theme_n]['fg'],
                     bg=self.themes[theme_n]['bg'],
                     style='bold'
@@ -200,6 +195,6 @@ class Printer:
     def banner(self, title):
         self._box_horizontal('ul', 'hl', 'ur')
         print(self._c('vl'), end="")
-        print(color(Cell(title).left(int(self.columns) - 2), style='bold'), end="")
+        print(color(Cell(title).left(int(self.col_count) - 2), style='bold'), end="")
         print(self._c('vl'))
         self._box_horizontal('ll', 'hl', 'lr')
