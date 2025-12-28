@@ -217,7 +217,7 @@ class Tables:
         """Display the profile table.
         """
         ptr = Printer(10, '*')
-        ptr.table_header(title=f'{Cell(self.profile)} {Cell("Profiles")}')
+        ptr.table_header(title=f'{Cell("Profiles")}')
 
         ptr.table_row(Cell('Name').text(), Cell('Description').text())
         ptr.table_boundary(weight='lite')
@@ -230,9 +230,10 @@ class Tables:
 
         for profile in profiles:
             ptr.set_theme(**theme[row_i % 2])
+            asterisk = '*' if profile.get('name') == self.profile else ""
             row_i += 1
             ptr.table_row(
-                Cell(profile.get('name')).text(),
+                f'{Cell(profile.get("name"))}{asterisk}',
                 Cell(profile.get('description')).text())
         ptr.table_close()
 
