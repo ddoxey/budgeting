@@ -15,6 +15,7 @@ from util.cache import Cache
 from util.money import Money
 from util.history import History
 from util.repetition import Repetition
+from util.text import Cell
 
 if 'libedit' in readline.__doc__:
     readline.parse_and_bind('bind ^I rl_complete')  # MAC
