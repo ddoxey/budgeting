@@ -209,7 +209,7 @@ class ChokepointList:
     def __init__(self, transaction_types, events):
         self.datapoints = OrderedDict()
         self.iteration_n = 0
-        self.smallest = None
+        self.minimum = None
 
         major_expense = {
             'category': None,
@@ -238,7 +238,7 @@ class ChokepointList:
                     'count': 0,
                 }
 
-        smallest = {
+        minimum = {
             'balance': 999999,
             'event': None
         }
@@ -247,20 +247,16 @@ class ChokepointList:
 
         for event_i, event in enumerate(events):
 
-            category = event.get('category')
-
             if event.get('amount') == major_expense['amount']:
-
                 major_expense['count'] += 1
 
             elif event.get('amount') == major_income['amount']:
-
                 if major_expense['count'] > 0 and event_i > 0:
-
                     last_event = events[event_i-1]
 
-                    if smallest['balance'] > last_event.get('balance'):
-                        smallest = {
+                    if minimum['balance'] > 0 and \
+                      minimum['balance'] > last_event.get('balance'):
+                        minimum = {
                             'balance': last_event.get('balance'),
                             'event': last_event,
                         }
@@ -274,14 +270,14 @@ class ChokepointList:
 
                 major_expense['count'] = 0
 
-        if smallest['balance'] > events[0].get('balance'):
-            smallest = {
+        if minimum['balance'] > events[0].get('balance'):
+            minimum = {
                 'balance': events[0].get('balance'),
                 'event': events[0],
             }
 
-        if smallest['event'] is not None:
-            self.smallest = Chokepoint(smallest['event'])
+        if minimum['event'] is not None:
+            self.minimum = Chokepoint(minimum['event'])
 
     def __len__(self):
         return len(self.chokepoints)
@@ -298,7 +294,7 @@ class ChokepointList:
         return self.chokepoints[self.iteration_n]
 
     def eye(self):
-        return self.smallest
+        return self.minimum
 
     def crash_date(self):
         x = list(self.datapoints.keys())
