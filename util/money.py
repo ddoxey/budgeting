@@ -2,7 +2,7 @@ import re
 
 class Money:
 
-    REGEX = re.compile(r'^([$]?[-]?|[-]?[$]?)[0-9]+[.][0-9]+?$')
+    REGEX = re.compile(r'^([$]?[-]?|[-]?[$]?)[0-9]+([.][0-9]+)?$')
 
     @staticmethod
     def matches(text):
