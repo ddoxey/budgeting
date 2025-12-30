@@ -75,7 +75,7 @@ class BudgetShell(cmd.Cmd):
         super().__init__(completekey, stdin, stdout)
         self.session = Cache.session('budget')
         if self.session is None or len(self.session) == 0:
-            self.session = {'balance': 0.0, 'profile': 'Main'}
+            self.session = {'profile': 'Main'}
         self.cache = None
         self.tables = None
         self.profiles = None
@@ -95,7 +95,8 @@ class BudgetShell(cmd.Cmd):
         self.changes['themes'] = False
         self.profiles = self.cache.read('profiles',
                                         [{'name': 'Main',
-                                          'description': 'Default Profile'}])
+                                          'description': 'Default Profile',
+                                          'balance': 0}])
         self.changes['profiles'] = False
         self.transaction_types = self.cache.read('transaction_types', [])
         self.changes['transaction_types'] = False
@@ -122,6 +123,19 @@ class BudgetShell(cmd.Cmd):
             self.cache.write('lasts', self.lasts)
         self.changes['lasts'] = False
 
+    def get_balance(self):
+        for profile in self.profiles:
+            if profile.get('name') == self.session['profile']:
+                return profile.get('balance', 0.0)
+        return 0.0
+
+    def set_balance(self, amount):
+        for profile_i, profile in enumerate(self.profiles):
+            if profile.get('name') == self.session['profile']:
+                self.profiles[profile_i]['balance'] = amount
+                self.do_save('profiles')
+                break
+
     def get_predicted_dates(self, cat):
         budget = Budget(0,
                         self.transaction_types,
@@ -145,11 +159,15 @@ class BudgetShell(cmd.Cmd):
         desc = m.group(2).strip()
         for profile_i, profile in enumerate(self.profiles):
             if profile.get('name') == name:
-                self.profiles[profile_i] = {'name': name, 'description': desc}
+                self.profiles[profile_i] = {'name': name,
+                                            'description': desc,
+                                            'balance': profile.get('balance', 0.0)}
                 print(f'updated profile {name}: {desc}', file=sys.stderr)
                 self.changes['profiles'] = True
                 return
-        self.profiles.append({'name': name, 'description': desc})
+        self.profiles.append({'name': name,
+                              'description': desc,
+                              'balance': 0.0})
         print(f'Added profile {name}: {desc}')
         self.changes['profiles'] = True
         return
@@ -810,19 +828,17 @@ Usage: balance [<amount>]
 
 Sets the account balance if a new value is provided."""
         line = line.strip().replace(',', "")
-        if len(line) == 0:
-            print(f'Balance: {Money(self.session.get("balance"), "$")}')
-        else:
+        if len(line) > 0:
             if not Money.matches(line):
+                print(f'Invalid monetary value: {line}', file=sys.stderr)
+                return
+            amount = float(Money(line))
+            if amount is None:
                 print(f'Invalid amount: {line}', file=sys.stderr)
-            else:
-                amount = float(Money(line))
-                if amount is None:
-                    print(f'Invalid amount: {line}', file=sys.stderr)
-                else:
-                    self.session['balance'] = amount
-                    Cache.session('budget', self.session)
-                    print(f'Balance: {Money(self.session.get("balance"), "$")}')
+                return
+            self.set_balance(amount)
+        balance = self.get_balance()
+        print(f'Balance: {Money(balance, "$")}')
 
     def do_cats(self, line):
         """Show a table of categories."""
@@ -898,7 +914,7 @@ Rotate the theme relative to the categories:
                 catd.rotate(1)
                 cats = list(catd)
                 for index, cat in enumerate(cats):
-                   self.tables.themes[cat] = themes[index] 
+                   self.tables.themes[cat] = themes[index]
             else:
                 print(f'Invalid themes operation: {arg_str}', file=sys.stderr)
                 return
@@ -922,9 +938,9 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
         else:
             if days > 60:
                 chokepoints = True
-            opening_balance = self.session.get('balance')
+            opening_balance = self.get_balance()
             budget = Budget(
-                self.session.get('balance'),
+                self.get_balance(),
                 self.transaction_types,
                 self.exceptions,
                 self.history['transactions'],
@@ -943,7 +959,7 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
             print('Usage: totals <number>(d|m|y)', file=sys.stderr)
         else:
             budget = Budget(
-                self.session.get('balance'),
+                self.get_balance(),
                 self.transaction_types,
                 self.exceptions,
                 self.history['transactions'],
@@ -954,9 +970,10 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
         """Display a summary of status parameters."""
         profiles = [profile for profile in self.profiles
                     if profile.get('name') == self.session.get('profile')]
+
         status = {
             Cell('Profile').text(): Cell(profiles[0].get('description')).text(),
-            Cell('Balance').text(): Money(self.session.get('balance'), "$"),
+            Cell('Balance').text(): str(Money(self.get_balance(), "$")),
             Cell('Categories').text(): len(self.categories),
             Cell('Exceptions').text(): len(self.exceptions),
             Cell('Cache Dir').text(): self.cache.cache_dir(),
