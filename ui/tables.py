@@ -216,10 +216,12 @@ class Tables:
     def profile_table(self, profiles):
         """Display the profile table.
         """
-        ptr = Printer(10, '*')
+        ptr = Printer(10, '*', 12)
         ptr.table_header(title=f'{Cell("Profiles")}')
 
-        ptr.table_row(Cell('Name').text(), Cell('Description').text())
+        ptr.table_row(Cell('Name').text(),
+                      Cell('Description').text(),
+                      Cell('Balance').text())
         ptr.table_boundary(weight='lite')
 
         theme = [
@@ -234,7 +236,8 @@ class Tables:
             row_i += 1
             ptr.table_row(
                 f'{Cell(profile.get("name"))}{asterisk}',
-                Cell(profile.get('description')).text())
+                Cell(profile.get('description')).text(),
+                str(Money(str(profile.get('balance', 0.0)))))
         ptr.table_close()
 
     def lasts_table(self, occurrences):
