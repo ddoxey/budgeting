@@ -277,7 +277,7 @@ class BudgetShell(cmd.Cmd):
     def update_transaction(self, arg_str):
         update_transaction_regex = re.compile((
             r'\A'
-            r'   (\w+) \s+ '
+            r'   (\S+) \s+ '
             r'   (\S+) \s+ '
             r'   ([-]? [$]? \d+ (?: [.]\d+ )?) \s* '
             r"   (?: r'( [^']+ )' \s* )? "
@@ -289,7 +289,7 @@ class BudgetShell(cmd.Cmd):
             return
         cat = m.group(1)
         if cat not in self.categories:
-            if not re.match(r'\A\w+\Z', cat):
+            if not re.match(r'\A[\w&-]+\Z', cat):
                 print(f'Bad category name: {cat}', file=sys.stderr)
                 return
         repetition = m.group(2)
