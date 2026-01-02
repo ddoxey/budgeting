@@ -87,6 +87,34 @@ class BudgetShell(cmd.Cmd):
         self.changes = {}
         self.do_reload(None)
 
+    def do_export(self, line):
+        """Set an environment variable."""
+        export_regex = re.compile((
+            r'\A'
+            r'   (\w+) [=] (\S+) '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = export_regex.match(line)
+        if m is None:
+            print(f'Unable parse export: {line}')
+            return
+        var_name = m.group(1)
+        var_value = m.group(2)
+        os.environ[var_name] = var_value
+
+    def do_unset(self, line):
+        """Unset an environment variable."""
+        unset_regex = re.compile((
+            r'\A'
+            r'   (\w+) '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = unset_regex.match(line)
+        if m is None:
+            print(f'Unable parse unset: {line}')
+            return
+        var_name = m.group(1)
+        if var_name in os.environ: 
+            del os.environ[var_name]
+
     def do_reload(self, line):
         """Reload cached data and history from the transactions CSV."""
         self.cache = Cache(name='budget',
