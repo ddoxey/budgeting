@@ -5,7 +5,7 @@ import re
 import sys
 import cmd
 import readline  # MAC
-from datetime import datetime
+from datetime import datetime, date
 from operator import itemgetter
 from collections import deque
 import colors
@@ -26,7 +26,21 @@ else:
 class Util:
 
     @staticmethod
+    def date_to_days_away(mm_dd_yyyy):
+        if mm_dd_yyyy is None:
+            return None
+        mm, dd, yyyy = re.split(r'\D+', mm_dd_yyyy, maxsplit=2)
+        try:
+            target = date(int(yyyy), int(mm), int(dd))
+        except ValueError:
+            return None
+        today = date.today()
+        return (target - today).days
+
+    @staticmethod
     def duration_to_days(duration):
+        if duration is None:
+            return None
         duration_regex = re.compile((
             r'\A'
             r'   (\d+) \s* ([dmy])'
@@ -955,14 +969,28 @@ Rotate the theme relative to the categories:
     def do_run(self, arg_str):
         """Run the budget for the specified number of days.
 
-Usage: run <number><duration-type>
+Usage: run <number><duration-type> [<start-date>]
 
 Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
         chokepoints = None
-        duration = arg_str.strip()
+        duration, days_offset = None, 0
+        run_regex = re.compile((
+            r'\A'
+            r'   (\d[ymd]) '
+            r'   (?: \s+ ([0-9]{2}[-][0-9]{2}[-][0-9]{4}) )? '
+            r'\Z'), re.X | re.M | re.S | re.I)
+        m = run_regex.match(arg_str)
+        if m is not None:
+            duration = m.group(1)
+            start_date = m.group(2)
+            if start_date is not None:
+                days_offset = Util.date_to_days_away(start_date)
+                if days_offset is None or days_offset < 0:
+                    print(f'Invalid date: {start_date}', file=sys.stderr)
+                    return
         days = Util.duration_to_days(duration)
         if days is None:
-            print('Usage: run <number>(d|m|y)', file=sys.stderr)
+            print('Usage: run <number>(d|m|y) [<start-date>]', file=sys.stderr)
         else:
             if days > 60:
                 chokepoints = True
@@ -972,7 +1000,8 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
                 self.transaction_types,
                 self.exceptions,
                 self.history['transactions'],
-                days)
+                days,
+                days_offset)
             self.tables.projection_table(opening_balance, budget, chokepoints)
 
     def do_totals(self, arg_str):
