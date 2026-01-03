@@ -1,6 +1,6 @@
 import re
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from collections import defaultdict
 from os import environ as env
 from scipy.stats import linregress
@@ -500,7 +500,7 @@ class Event:
 
 class Budget:
 
-    def __init__(self, balance, transaction_types, exceptions, history, days):
+    def __init__(self, balance, transaction_types, exceptions, history, days, days_offset=0):
 
         self.trans = transaction_types
 
@@ -512,6 +512,9 @@ class Budget:
         }
 
         now = datetime.now(tz=timezone(NFCU_TZ))
+
+        if days_offset > 0:
+            now = now + timedelta(days=days_offset)
 
         self.last_occurrence_of = find_lasts(
             history,
