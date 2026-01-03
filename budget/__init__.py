@@ -8,6 +8,7 @@ from collections import OrderedDict
 from pytz import timezone
 from util.repetition import Repetition
 
+
 NFCU_TZ = 'EST'
 ONE_DAY = 86400
 
@@ -23,6 +24,7 @@ def is_older(date_a, date_b):
             hour=0,
             minute=0,
             second=0,
+            microsecond=0,
             tzinfo=timezone(NFCU_TZ))
 
     if not isinstance(date_b, datetime):
@@ -34,6 +36,7 @@ def is_older(date_a, date_b):
             hour=0,
             minute=0,
             second=0,
+            microsecond=0,
             tzinfo=timezone(NFCU_TZ))
 
     return date_a < date_b
@@ -57,6 +60,7 @@ def compute_last(trans_type):
         hour=0,
         minute=0,
         second=0,
+        microsecond=0,
         tzinfo=timezone(NFCU_TZ))
 
     to_date = datetime.fromtimestamp(
@@ -72,6 +76,7 @@ def compute_last(trans_type):
             hour=0,
             minute=0,
             second=0,
+            microsecond=0,
             tzinfo=from_date.tzinfo)
         for ts in timestamps]
         if d.strftime(repetition.field) in repetition.values]
@@ -92,6 +97,7 @@ def compute_last(trans_type):
         hour=0,
         minute=0,
         second=0,
+        microsecond=0,
         tzinfo=timezone(NFCU_TZ))
 
 
@@ -140,6 +146,7 @@ def find_lasts(history, transaction_types, exceptions, now):
             hour=0,
             minute=0,
             second=0,
+            microsecond=0,
             tzinfo=timezone(NFCU_TZ))
 
     if len(last_for) != len(transaction_types):
@@ -161,6 +168,7 @@ def find_lasts(history, transaction_types, exceptions, now):
                     hour=0,
                     minute=0,
                     second=0,
+                    microsecond=0,
                     tzinfo=timezone(NFCU_TZ))
 
     return last_for
@@ -310,22 +318,24 @@ class DateList:
 
     def __init__(self, repetition, now, from_date, day_span):
 
-        days_ago = (now - from_date).days
-        days = day_span + days_ago
-
-        repetition = Repetition(repetition)
+        repeat = Repetition(repetition)
 
         from_date = from_date.replace(
             hour=0,
             minute=0,
             second=0,
+            microsecond=0,
             tzinfo=timezone(NFCU_TZ))
 
         now = now.replace(
             hour=0,
             minute=0,
             second=0,
+            microsecond=0,
             tzinfo=timezone(NFCU_TZ))
+
+        days_ago = (now - from_date).days
+        days = day_span + days_ago
 
         to_date = datetime.fromtimestamp(
             int(now.timestamp()) + ((day_span + 1) * ONE_DAY))
@@ -334,6 +344,7 @@ class DateList:
             hour=23,
             minute=59,
             second=59,
+            microsecond=999,
             tzinfo=timezone(NFCU_TZ))
 
         if to_date < from_date:
@@ -342,7 +353,7 @@ class DateList:
             raise ValueError(f'({to_date}) precedes ({from_date})')
 
         timestamps = range(
-            int(from_date.timestamp()),
+            int(from_date.timestamp()) + ONE_DAY,
             int(to_date.timestamp()),
             ONE_DAY
         )
@@ -350,14 +361,12 @@ class DateList:
         now_ts = int(now.timestamp())
 
         dates = [
-            {
-                'ts': ts,
-                'dt': datetime.fromtimestamp(ts).replace(
-                    hour=0,
-                    minute=0,
-                    second=0,
-                    tzinfo=from_date.tzinfo),
-            }
+            datetime.fromtimestamp(ts).replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0,
+                tzinfo=from_date.tzinfo)
             for ts in timestamps
         ]
 
@@ -366,21 +375,20 @@ class DateList:
         self.dates = []
 
         for date in dates:
-            if date['dt'].strftime(repetition.field) in repetition.values:
+            if date.strftime(repeat.field) in repeat.values:
                 occurrence_count += 1
-                value = date['dt'].strftime(repetition.field)
-                if date['ts'] < now_ts:
+                value = date.strftime(repeat.field)
+                if date.timestamp() < now_ts:
                     continue
-                if repetition.repeater == 1 or \
-                  occurrence_count % repetition.repeater == 0:
-                    if date['dt'] != from_date:
-                        self.dates.append(date['dt'])
+                if repeat.repeater == 1 or \
+                  occurrence_count % repeat.repeater == 0:
+                    self.dates.append(date)
 
         self.from_date = from_date
         self.to_date = to_date
-        self.field = repetition.field
+        self.field = repeat.field
         self.value = value
-        self.repeater = repetition.repeater
+        self.repeater = repeat.repeater
         self.days = days
 
     def json(self):
