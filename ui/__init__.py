@@ -8,14 +8,17 @@ from util.text import Cell
 
 class Printer:
 
+    @classmethod
+    def screen_dims(cls):
+        with os.popen('stty size', 'r') as stty:
+            for line in stty:
+                return [int(n) for n in line.strip().split()]
+        return None, None
+
     def __init__(self, *cell_widths):
         if len(cell_widths) == 0:
             raise RuntimeError(f'{__class__.__name__} Requires column widths')
-        self.row_count, self.col_count = None, None
-        with os.popen('stty size', 'r') as stty:
-            for line in stty:
-                self.row_count, self.col_count = [int(n) for n in line.split()]
-                break
+        self.row_count, self.col_count = self.screen_dims()
         if isinstance(cell_widths[0], types.GeneratorType):
             self.cell_widths = self.adjust_widths(list(*cell_widths))
         else:

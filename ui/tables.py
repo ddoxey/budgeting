@@ -1,11 +1,37 @@
 #!/usr/bin/env python3
 
 import math
+import shutil
+import subprocess
 from operator import itemgetter
 from ui import Printer
 from util.money import Money
 from util.text import Cell
 from util.repetition import Repetition
+
+
+def make_dotchart(budget):
+    balances = [f"{event.get('balance'):.2f}"
+                for event in budget]
+    data = "\n".join(balances) + "\n"
+    dotchart = shutil.which('dotchart')
+    if dotchart is None:
+        return None
+    rows, cols = Printer.screen_dims()
+    proc = subprocess.run(
+        ['/usr/local/bin/dotchart', '-y',
+                                    '--color',
+                                    '--width', str(cols - 1)],
+        input=data,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"dotchart failed ({proc.returncode}): {proc.stderr.strip()}"
+        )
+    return proc.stdout
 
 
 class Tables:
@@ -45,6 +71,8 @@ class Tables:
                     f'{event.get("balance"):0.2f}')
         ptr.table_close()
 
+        eye = None
+
         if chokepoints:
             chokepoints = budget.get_chokepoints()
             eye = chokepoints.eye()
@@ -72,11 +100,6 @@ class Tables:
                     )
                 ptr.table_close()
 
-                if eye > 0:
-                    crash_date = chokepoints.crash_date()
-                    ptr.set_theme(fg='white', bg='red')
-                    ptr.banner(f'{Cell("Predicted Crash Date")}: {crash_date}')
-
         days = budget.get_days()
         months_elapsed = int(days / 30)
         days = days - int(months_elapsed * 30)
@@ -85,6 +108,16 @@ class Tables:
             print(f'{months_elapsed} {Cell("months")}, {days} {Cell("days elapsed")}\n')
         elif days > 0:
             print(f'{days} {Cell("days")}\n')
+
+        chart = make_dotchart(budget)
+        if chart is not None:
+            print(f'\n{chart.rstrip()}')
+
+        if eye is not None and eye > 0:
+            crash_date = chokepoints.crash_date()
+            ptr.set_theme(fg='white', bg='red')
+            ptr.banner(f'{Cell("Predicted Crash Date")}: {crash_date}')
+
 
     def totals_table(self, duration, totals: dict):
         """Print the table of totals.
