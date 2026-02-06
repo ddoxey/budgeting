@@ -976,7 +976,7 @@ Where <duration-type> is 'd' for days, 'm' for months, 'y' for years."""
         duration, days_offset = None, 0
         run_regex = re.compile((
             r'\A'
-            r'   (\d[ymd]) '
+            r'   (\d+[ymd]) '
             r'   (?: \s+ ([0-9]{2}[-][0-9]{2}[-][0-9]{4}) )? '
             r'\Z'), re.X | re.M | re.S | re.I)
         m = run_regex.match(arg_str)
