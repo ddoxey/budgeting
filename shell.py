@@ -869,8 +869,18 @@ Sets the current profile if a new value is provided."""
 Usage: balance [<amount>]
 
 Sets the account balance if a new value is provided."""
+        operator = None
         line = line.strip().replace(',', "")
         if len(line) > 0:
+            inc_dec_balance_regex = re.compile((
+                r'\A'
+                r'  ([+-]=) \s* '
+                r'  (\S+) '
+                r'\Z'), re.X | re.M | re.S | re.I)
+            m = inc_dec_balance_regex.match(line)
+            if m is not None:
+                operator = m.group(1)
+                line = m.group(2)
             if not Money.matches(line):
                 print(f'Invalid monetary value: {line}', file=sys.stderr)
                 return
@@ -878,6 +888,12 @@ Sets the account balance if a new value is provided."""
             if amount is None:
                 print(f'Invalid amount: {line}', file=sys.stderr)
                 return
+            if operator is not None:
+                balance = self.get_balance()
+                if operator == '+=':
+                    amount = balance + amount
+                elif operator == '-=':
+                    amount = balance - amount
             self.set_balance(amount)
         balance = self.get_balance()
         print(f'Balance: {Money(balance, "$")}')
