@@ -11,6 +11,10 @@ from util.repetition import Repetition
 
 
 def make_dotchart(budget):
+    """
+    Create a balances dotchart for the given budget.
+    See: https://github.com/ddoxey/dotchart
+    """
     balances = [f"{event.get('balance'):.2f}"
                 for event in budget]
     data = "\n".join(balances) + "\n"
