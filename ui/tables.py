@@ -144,7 +144,7 @@ class Tables:
         columns_n = 3
         rows_n = math.ceil(len(categories) / columns_n)
 
-        ptr = Printer(15 for col_i in range(columns_n))
+        ptr = Printer(*[15 for _ in range(columns_n)])
 
         ptr.table_header(title=f'{Cell(self.profile)} {Cell("Categories")}')
 
