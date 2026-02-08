@@ -23,9 +23,9 @@ def make_dotchart(budget):
         return None
     rows, cols = Printer.screen_dims()
     proc = subprocess.run(
-        ['/usr/local/bin/dotchart', '-y', '%0.0f',
-                                    '--color',
-                                    '--width', str(cols - 1)],
+        [dotchart, '-y', '%0.0f',
+                    '--color',
+                    '--width', str(cols - 1)],
         input=data,
         text=True,
         capture_output=True,
