@@ -682,23 +682,25 @@ All changed data will be saved if the optional save type is omitted."""
             r'   (\w+) '
             r'\Z'), re.X | re.M | re.S | re.I)
         m = del_theme_regex.match(arg_str)
-        if m is not None:
-            name = m.group(1)
-            if name == 'Main':
-                print(f'Profile "{name}" cannot be deleted', file=sys.stderr)
-                return
-            profiles = [profile for profile in self.profiles
-                        if profile.get('name') != name]
-            if len(profiles) < len(self.profiles):
-                self.cache.delete(profile=name)
-                self.profiles = profiles
-                self.do_save('profiles')
-                print(f'Removed profile: {name}')
-                if name == self.session.get('profile'):
-                    self.session['profile'] = 'Main'
-                    Cache.session('budget', self.session)
-                    self.do_reload(None)
-                return
+        if m is None:
+            print(f'Invalid profile del command: {arg_str}', file=sys.stderr)
+            return
+        name = m.group(1)
+        if name == 'Main':
+            print(f'Profile "{name}" cannot be deleted', file=sys.stderr)
+            return
+        profiles = [profile for profile in self.profiles
+                    if profile.get('name') != name]
+        if len(profiles) < len(self.profiles):
+            self.cache.delete(profile=name)
+            self.profiles = profiles
+            self.do_save('profiles')
+            print(f'Removed profile: {name}')
+            if name == self.session.get('profile'):
+                self.session['profile'] = 'Main'
+                Cache.session('budget', self.session)
+                self.do_reload(None)
+            return
         print(f'Profile not found: {name}', file=sys.stderr)
 
     def delete_theme(self, arg_str):
