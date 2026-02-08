@@ -49,7 +49,7 @@ class History:
             for row in csv_doc:
                 event = {}
                 for header_i in range(len(headers)):
-                    event[headers[header_i]] = row[header_i]
+                    event[headers[header_i]] = row[header_i] if header_i < len(row) else ""
                 transactions.append(event)
         return {'transactions': transactions,
                 'filename': os.path.basename(csv_file),
