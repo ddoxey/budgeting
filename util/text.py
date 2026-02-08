@@ -18,7 +18,10 @@ def disp_width(s: str) -> int:
 class Lang:
     Debug = os.environ.get('DEBUG', False)
     DebugLog = None
-    Language, Encoding = os.environ.get('LANG', 'en_US.UTF-8').split('.', 1)
+    _lang = os.environ.get('LANG', 'en_US.UTF-8')
+    _parts = _lang.split('.', 1)
+    Language = _parts[0]
+    Encoding = _parts[1] if len(_parts) > 1 else 'UTF-8'
     ConfigFilename = os.path.join(os.environ['HOME'], 'budget-lang.json')
     TextFor = None
 
