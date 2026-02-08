@@ -21,6 +21,8 @@ class Cache:
             if session is None:
                 session = {}
             return session
+        if not os.path.exists(cache_dir):
+            os.makedirs(cache_dir, mode=0o700, exist_ok=True)
         with open(filename, 'wb') as pkl_file:
             print(f'Updating: {os.path.basename(filename)}',
                   file=sys.stderr)
