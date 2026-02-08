@@ -5,7 +5,7 @@ import re
 import sys
 import cmd
 import readline  # MAC
-from datetime import datetime, date
+from datetime import datetime, date, timedelta
 from operator import itemgetter
 from collections import deque
 import colors
@@ -71,13 +71,16 @@ class Util:
             exc['epoch'] = int(date.strftime('%s'))
             return exc
 
-        threshold = 15  # wtf?
+        cutoff_date = date.today() - timedelta(days=15)
+        cutoff_epoch = int(datetime(cutoff_date.year,
+                                    cutoff_date.month,
+                                    cutoff_date.day).strftime('%s'))
         exceptions = sorted([update_epoch(record)
                              for record in exceptions],
                             key=itemgetter('epoch'))
 
         return [exc for exc in exceptions
-                if exc['epoch'] >= threshold
+                if exc['epoch'] >= cutoff_epoch
                 and exc.get('category') in categories]
 
 
