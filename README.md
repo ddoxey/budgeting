@@ -24,3 +24,8 @@ run 1y 03-01-2026
 
 `run` prints a projection table (and a dotchart when available) so you can see
 expected balances and potential low points.
+
+Note: This project is superseded by the C++ rewrite at:
+```
+https://github.com/ddoxey/budget
+```
